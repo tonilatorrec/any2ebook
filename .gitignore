@@ -183,3 +183,7 @@ cython_debug/
 any2ebook/config.yaml
 any2ebook/config.yaml
 .vscode/launch.json
+
+# Project specific
+output/
+inbox/staging/
