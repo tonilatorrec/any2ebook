@@ -84,6 +84,10 @@ def main():
         )
         config['Inbox path'] = inbox_path
 
+    # update config
+    with open('config.yaml', 'w') as f:
+        yaml.dump(config, f)
+
     if not os.path.exists(os.path.join(inbox_path, 'staging')):
         os.mkdir(os.path.join(inbox_path, 'staging')) 
     staging_path = os.path.join(inbox_path, 'staging')
