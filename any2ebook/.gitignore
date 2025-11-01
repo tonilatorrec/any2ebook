@@ -182,5 +182,5 @@ cython_debug/
 
 # Project specific
 output/
-any2ebook/config.yaml
+config.yaml
 inbox/staging/
