@@ -188,3 +188,4 @@ any2ebook/config.yaml
 output/
 inbox/staging/
 any2ebook/config.yaml
+/inbox/epub/staging
