@@ -183,4 +183,5 @@ cython_debug/
 # Project specific
 output/
 config.yaml
+inbox/epub/staging/
 inbox/staging/
