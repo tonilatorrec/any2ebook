@@ -127,7 +127,7 @@ def upsert_item(
                     "url_hash": url_hash,
                     "obsidian_path": str(md_file_path),
                     "title": item_front_matter['title'],
-                    "author": item_front_matter['author'][0].strip('[[').strip(']]'),
+                    "author": None if item_front_matter['author'] is None else item_front_matter['author'][0].strip('[[').strip(']]'),
                     "published": item_front_matter['published'],
                     "created": item_front_matter['created']})
         row = cur.fetchone()
