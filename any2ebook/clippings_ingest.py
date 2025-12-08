@@ -35,7 +35,7 @@ def read_front_matter(file_path: str | os.PathLike | Path) -> dict:
         ValueError: if YAML is syntactically invalid and cannot be parsed.
     """
     lines = []
-    with open(file_path, 'r') as f:
+    with open(file_path, 'r', encoding='utf8') as f:
         found_delimiter = False
         for line in f.readlines():
             if line == '---\n' and found_delimiter:
