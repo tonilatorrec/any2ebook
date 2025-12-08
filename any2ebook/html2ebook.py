@@ -1,6 +1,7 @@
 import requests
 from readabilipy import simple_json_from_html_string
 from ebooklib import epub
+import datetime
 
 def extract_website_content(url):
     """
@@ -43,8 +44,9 @@ def html_to_epub(title, html_content, output_filename):
     epub.write_epub(output_filename, book)
 
 def create_epub_from_urls(urls, output_filename):
+    date = datetime.datetime.now().strftime('%Y-%m-%d')
     book = epub.EpubBook()
-    book.set_title('Collected Articles')
+    book.set_title('Collected Articles -' + date)
     book.add_author('Unknown')
     chapters = []
     toc = []
