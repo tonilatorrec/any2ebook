@@ -189,3 +189,5 @@ output/
 inbox/staging/
 any2ebook/config.yaml
 /inbox/epub/staging
+
+run_gui.py

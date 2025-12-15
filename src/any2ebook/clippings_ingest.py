@@ -5,7 +5,7 @@ import yaml
 import hashlib
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-from any2ebook.paths import ensure_config
+from .paths import ensure_config
 from .create_obsidian_db import db_path
 
 
@@ -172,6 +172,5 @@ def main():
         normalized_file_url = hash_url(file_url)
         id = upsert_item(db_path(), front_matter, normalized_file_url,
                     file)
-        print(id)
 if __name__ == '__main__':
     main()
