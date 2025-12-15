@@ -6,7 +6,9 @@ import datetime
 import yaml
 import os
 
-from html2ebook import create_epub_from_urls
+from .html2ebook import create_epub_from_urls
+from .clippings_ingest import ensure_config
+from .create_obsidian_db import db_path
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
     """Staging"""
@@ -61,10 +63,12 @@ def stage_and_convert(id_list: list[int], url_list: list[str], path_to_db: str, 
         )    
 
 def main():
-    ids, urls = get_urls_to_convert('obsidian.db') # -> list[tuple[str]]
+    cfg_path = ensure_config()
+    ids, urls = get_urls_to_convert(db_path()) # -> list[tuple[str]]
 
-    with open('config.yaml', 'r') as f:
+    with open(cfg_path, 'r') as f:
         config = yaml.safe_load(f)
+
 
     inbox_path = config['Inbox path']
     if inbox_path is None:
@@ -84,15 +88,30 @@ def main():
         )
         config['Inbox path'] = inbox_path
 
+    output_path = config['Output path']
+    if output_path is None:
+        print("Output path not yet set. ", end="")
+        while True:
+            output_path = input(
+            """Please set path:\n> """
+            )
+            if os.path.exists(output_path):
+                break
+        config['Output path'] = output_path
+    elif not os.path.exists(output_path):
+        k = input("Inbox path does not exist. Create? [y/n]")
+        os.makedirs(k)
+        config['Output path'] = output_path
+
     # update config
-    with open('config.yaml', 'w') as f:
+    with open(cfg_path, 'w') as f:
         yaml.dump(config, f)
 
     if not os.path.exists(os.path.join(inbox_path, 'staging')):
         os.mkdir(os.path.join(inbox_path, 'staging')) 
     staging_path = os.path.join(inbox_path, 'staging')
 
-    stage_and_convert(ids, urls, 'obsidian.db', '../output', staging_path)
+    stage_and_convert(ids, urls, db_path(), output_path, staging_path)
 
 if __name__ == '__main__':
     main()

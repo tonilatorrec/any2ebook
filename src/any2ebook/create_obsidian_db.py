@@ -1,7 +1,27 @@
 import sqlite3
+import os
+from pathlib import Path
+
+APP_NAME = "any2ebook"
+
+def user_data_dir(app: str = APP_NAME) -> Path:
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        return base / app
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        return base / app
+
+def db_path() -> Path:
+    d = user_data_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "obsidian.db"
 
 def main():
-    conn = sqlite3.connect('obsidian.db') # will create db if it does not exist
+    db = db_path()
+    conn = sqlite3.connect(db) # will create db if it does not exist
     cursor = conn.cursor()
 
     # create "items" table which stores information about the clippings

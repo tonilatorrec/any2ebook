@@ -16,3 +16,19 @@ dependencies = [
 constraint-dependencies = [
     "pyqt5-qt5<=5.15.2; sys_platform == 'win32'",
 ]
+
+[project.scripts]
+any2ebook = "any2ebook.any2ebook:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+any2ebook = ["*.yaml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
