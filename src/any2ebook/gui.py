@@ -1,6 +1,12 @@
-import any2ebook
+from .any2ebook import main as cli_main
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QMessageBox
 import sys
+
+class SuccessWindow(QtWidgets.QWidget):
+    def __init__(self):
+        self.setWindowTitle('Success')
+        self.resize
 
 class MainWindow(QtWidgets.QWidget):
     def __init__(self):
@@ -14,7 +20,11 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.generate_btn)        
 
     def on_generate(self):
-        any2ebook.main()
+        success = cli_main()
+        if success:
+            QMessageBox.information(self, "Success", "Success!")
+        else:
+            QMessageBox.critical(self, "Error", "Failed")
 
 def run_gui():
     app = QtWidgets.QApplication(sys.argv)
