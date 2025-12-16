@@ -6,6 +6,7 @@ from pathlib import Path
 
 APP_NAME = "any2ebook"
 
+
 def user_config_dir() -> Path:
     """Get conventional config dir based on OS"""
     if os.name == "nt":

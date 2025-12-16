@@ -1,7 +1,6 @@
-import os
-
 from . import clippings_ingest
 from . import clippings_to_epub
+
 
 def main():
     try:
@@ -11,6 +10,7 @@ def main():
     except Exception as e:
         print(e)
         return False
-    
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     main()

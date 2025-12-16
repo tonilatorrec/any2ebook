@@ -1,8 +1,10 @@
 import sqlite3
 import os
+import sys
 from pathlib import Path
 
 APP_NAME = "any2ebook"
+
 
 def user_data_dir(app: str = APP_NAME) -> Path:
     if os.name == "nt":
@@ -14,14 +16,16 @@ def user_data_dir(app: str = APP_NAME) -> Path:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
         return base / app
 
+
 def db_path() -> Path:
     d = user_data_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d / "obsidian.db"
 
+
 def main():
     db = db_path()
-    conn = sqlite3.connect(db) # will create db if it does not exist
+    conn = sqlite3.connect(db)  # will create db if it does not exist
     cursor = conn.cursor()
 
     # create "items" table which stores information about the clippings
@@ -68,5 +72,6 @@ def main():
         """
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
