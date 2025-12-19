@@ -1,7 +1,9 @@
-from .any2ebook import main as cli_main
+import sys
+
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QMessageBox
-import sys
+
+from .any2ebook import main as cli_main
 
 
 class SuccessWindow(QtWidgets.QWidget):

@@ -1,6 +1,4 @@
-from . import clippings_ingest
-from . import clippings_to_epub
-
+from . import clippings_ingest, clippings_to_epub
 
 def main():
     try:
@@ -8,7 +6,7 @@ def main():
         clippings_to_epub.main()
         return True
     except Exception as e:
-        print(e)
+        print("Error:", e)
         return False
 
 
