@@ -1,11 +1,12 @@
-import sqlite3
 import datetime
-import yaml
 import os
+import sqlite3
 
+import yaml
+
+from .create_obsidian_db import db_path
 from .html2ebook import create_epub_from_urls
 from .paths import ensure_config
-from .create_obsidian_db import db_path
 
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
@@ -86,40 +87,41 @@ def main():
     with open(cfg_path, "r") as f:
         config = yaml.safe_load(f)
 
-    inbox_path = config["Inbox path"]
-    if inbox_path is None:
-        print("Inbox path not yet set. ", end="")
-        while True:
-            inbox_path = input("""Please set path:\n> """)
-            if os.path.exists(inbox_path):
-                break
-        config["Inbox path"] = inbox_path
-    elif not os.path.exists(inbox_path):
-        print("Inbox path does not exist. ", end="")
-        while not os.path.exists(inbox_path):
-            inbox_path = input("""Please set valid path:\n> """)
-        config["Inbox path"] = inbox_path
+    # TODO: i commented it out because the inbox is not implemented yet
+    # inbox_path = config["inbox_path"]
+    # if inbox_path is None:
+    #     print("Inbox path not yet set. ", end="")
+    #     while True:
+    #         inbox_path = input("""Please set path:\n> """)
+    #         if os.path.exists(inbox_path):
+    #             break
+    #     config["inbox_path"] = inbox_path
+    # elif not os.path.exists(inbox_path):
+    #     print("Inbox path does not exist. ", end="")
+    #     while not os.path.exists(inbox_path):
+    #         inbox_path = input("""Please set valid path:\n> """)
+    #     config["inbox_path"] = inbox_path
 
-    output_path = config["Output path"]
+    output_path = config["output_path"]
     if output_path is None:
         print("Output path not yet set. ", end="")
         while True:
             output_path = input("""Please set path:\n> """)
             if os.path.exists(output_path):
                 break
-        config["Output path"] = output_path
+        config["output_path"] = output_path
     elif not os.path.exists(output_path):
-        k = input("Inbox path does not exist. Create? [y/n]")
+        k = input("Output path does not exist. Create? [y/n]")
         os.makedirs(k)
-        config["Output path"] = output_path
+        config["output_path"] = output_path
 
     # update config
     with open(cfg_path, "w") as f:
         yaml.dump(config, f)
 
-    if not os.path.exists(os.path.join(inbox_path, "staging")):
-        os.mkdir(os.path.join(inbox_path, "staging"))
-    staging_path = os.path.join(inbox_path, "staging")
+    staging_path = os.path.join(cfg_path.parent, "staging")
+    if not os.path.exists(staging_path):
+        os.mkdir(staging_path)
 
     stage_and_convert(ids, urls, db_path(), output_path, staging_path)
 

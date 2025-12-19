@@ -1,13 +1,19 @@
 import os
 import shutil
-from pathlib import Path
 from importlib.resources import files
+from pathlib import Path
 
 APP_NAME = "any2ebook"
 
+def _override_root() -> Path | None:
+    v = os.environ.get("ANY2EBOOK_HOME")
+    return Path(v).expanduser().resolve() if v else None
 
 def user_config_dir() -> Path:
     """Get conventional config dir based on OS"""
+    root = _override_root()
+    if root:
+        return root / "config"
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         if not base:
@@ -18,7 +24,6 @@ def user_config_dir() -> Path:
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         return base / APP_NAME
-
 
 def ensure_config() -> Path:
     """Ensures the user config file exists, otherwise copies from config_sample.yaml

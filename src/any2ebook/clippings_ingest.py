@@ -1,12 +1,13 @@
-import os
-from pathlib import Path
-import sqlite3
-import yaml
 import hashlib
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+import os
+import sqlite3
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from .paths import ensure_config
+import yaml
+
 from .create_obsidian_db import db_path
+from .paths import ensure_config
 
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
@@ -20,7 +21,7 @@ def find_clipping_files(path: str | os.PathLike) -> list[Path]:
     """
     files = []
     main_path = Path(path)
-    for file_path in main_path.glob("*/*"):
+    for file_path in main_path.rglob("*/*"):
         if file_path.is_file() and file_path.suffix == ".md":
             files.append(file_path)
     return files
@@ -141,19 +142,19 @@ def main():
     with open(cfg_path, "r") as f:
         config = yaml.safe_load(f)
 
-    obsidian_clippings_path = config["Obsidian clippings path"]
+    obsidian_clippings_path = config["clippings_path"]
     if obsidian_clippings_path is None:
         print("Obsidian clippings path not yet set. ", end="")
         while True:
             obsidian_clippings_path = input("""Please set path:\n> """)
             if os.path.exists(obsidian_clippings_path):
                 break
-        config["Obsidian clippings path"] = obsidian_clippings_path
+        config["clippings_path"] = obsidian_clippings_path
     elif not os.path.exists(obsidian_clippings_path):
         print("Obsidian clippings path does not exist. ", end="")
         while not os.path.exists(obsidian_clippings_path):
             obsidian_clippings_path = input("""Please set valid path:\n> """)
-        config["Obsidian clippings path"] = obsidian_clippings_path
+        config["clippings_path"] = obsidian_clippings_path
     else:
         pass
 

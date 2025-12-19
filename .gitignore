@@ -191,3 +191,5 @@ any2ebook/config.yaml
 /inbox/epub/staging
 
 run_gui.py
+.test_run
+*.ps1
