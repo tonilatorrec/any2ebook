@@ -92,6 +92,7 @@ class MainWindow(QtWidgets.QWidget):
         if dlg.exec_() == dlg.Accepted:
             self.config = dlg.get_config()
             self.save_config()
+            # TODO: inform user when the config is not correct (e.g. clippings folder is not a valid path) - use pydantic?
 
     def save_config(self):
         with open(self.path_to_config, 'w') as f:
