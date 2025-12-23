@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import (
 )
 
 from .any2ebook import main as cli_main
-from .paths import ensure_config
+from .paths import user_config_dir, ensure_config
+from importlib.resources import files
 
 import yaml
 
@@ -61,9 +62,15 @@ class MainWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("any2ebook")
         self.resize(300, 200)
-        self.path_to_config = ensure_config()
-        with open(self.path_to_config, 'r') as f:
-            self.config = yaml.safe_load(f)
+
+        self.path_to_config = user_config_dir() / "config.yaml"
+        if not self.path_to_config.exists():
+            with open(files('any2ebook').joinpath('config_sample.yaml')) as f:
+                self.config = yaml.safe_load(f)
+            self.show_prompt_ask_for_config()
+        else:
+            with open(self.path_to_config, 'r') as f:
+                self.config = yaml.safe_load(f)
 
         layout = QtWidgets.QVBoxLayout(self)
         self.generate_btn = QPushButton("Generate EPUB")
@@ -90,6 +97,9 @@ class MainWindow(QtWidgets.QWidget):
         with open(self.path_to_config, 'w') as f:
             yaml.dump(self.config, f)
 
+    def show_prompt_ask_for_config(self):
+        msg_box = QMessageBox.information(self, 'Information', "No configuration yet. Press OK to introduce config...", QMessageBox.StandardButton.Ok)
+        self.open_config()
 
 def run_gui():
     app = QtWidgets.QApplication(sys.argv)
