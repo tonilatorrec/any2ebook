@@ -1,5 +1,6 @@
 from . import clippings_ingest, clippings_to_epub
 
+
 def main():
     try:
         clippings_ingest.main()

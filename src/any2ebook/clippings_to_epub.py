@@ -14,9 +14,7 @@ def get_urls_to_convert(path_to_db: str) -> list[str]:
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
     cur = conn.cursor()
     with conn:
-        query = cur.execute(
-            'SELECT id, url FROM items WHERE status IN ("new", "failed")'
-        )
+        query = cur.execute('SELECT id, url FROM items WHERE status IN ("new", "failed")')
         res = query.fetchall()
 
         ids = [r[0] for r in res]
@@ -42,13 +40,9 @@ def stage_and_convert(
     datetime_str = datetime.datetime.now().strftime("%Y-%m-%d")
     idx_runs = 1
     if os.path.exists(os.path.join(staging_dir, datetime_str + ".txt")):
-        while os.path.exists(
-            os.path.join(staging_dir, datetime_str + "_" + str(idx_runs))
-        ):
+        while os.path.exists(os.path.join(staging_dir, datetime_str + "_" + str(idx_runs))):
             idx_runs += 1
-        staging_path = os.path.join(
-            staging_dir, datetime_str + "_" + str(idx_runs) + ".txt"
-        )
+        staging_path = os.path.join(staging_dir, datetime_str + "_" + str(idx_runs) + ".txt")
     else:
         staging_path = os.path.join(staging_dir, datetime_str + ".txt")
 
@@ -57,13 +51,9 @@ def stage_and_convert(
             f.write(url + "\n")
 
     if os.path.exists(os.path.join(output_dir, datetime_str + ".epub")):
-        while os.path.exists(
-            os.path.join(output_dir, datetime_str + "_" + str(idx_runs))
-        ):
+        while os.path.exists(os.path.join(output_dir, datetime_str + "_" + str(idx_runs))):
             idx_runs += 1
-        output_path = os.path.join(
-            output_dir, datetime_str + "_" + str(idx_runs) + ".epub"
-        )
+        output_path = os.path.join(output_dir, datetime_str + "_" + str(idx_runs) + ".epub")
     else:
         output_path = os.path.join(output_dir, datetime_str + ".epub")
 
