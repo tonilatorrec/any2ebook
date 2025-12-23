@@ -2,12 +2,27 @@
 
 Converts [Obsidian clippings](https://obsidian.md/clipper) to epub files to be read in ebook readers
 
-## Installation
-Get source code:
+## Setup
+Install using `uv`:
 ```
 uv tool install git+https://github.com/tonilatorrec/any2ebook.git
 ```
 
+Upgrade:
+```
+uv tool upgrade any2ebook
+```
+
+Remove:
+```
+uv tool uninstall any2ebook
+```
+
+Or with `make`, this also creates the cli and gui executables:
+```
+make install
+make build
+```
 ## Run
 ```
 any2ebook

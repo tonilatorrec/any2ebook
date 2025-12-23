@@ -91,9 +91,7 @@ def hash_url(url: str) -> str:
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()
 
 
-def upsert_item(
-    db_path: Path, item_front_matter: dict, url_hash: str, md_file_path: str
-):
+def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_path: str):
     """
     Insert-or-update an item keyed by url_hash.
     - Does NOT change status/attempts during scans; only refreshes light metadata + last_seen.
