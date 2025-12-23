@@ -28,7 +28,7 @@ class ConfigDialog(QDialog):
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
-        self.clippings_edit = QLineEdit(config.get("clippings_path", ""))
+        self.clippings_edit = QLineEdit(config.get("clippings_path", "")) # TODO: use file dialogs
         self.input_edit = QLineEdit(config.get("input_path", ""))
         self.output_edit = QLineEdit(config.get("output_path", ""))
 
