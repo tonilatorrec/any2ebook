@@ -3,7 +3,7 @@ import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QHBoxLayout, QMessageBox
+    QLineEdit, QPushButton, QHBoxLayout, QMessageBox, QFileDialog
 )
 
 from .any2ebook import main as cli_main
@@ -12,11 +12,27 @@ from importlib.resources import files
 
 import yaml
 
-
 class SuccessWindow(QtWidgets.QWidget):
     def __init__(self):
         self.setWindowTitle("Success")
         self.resize
+
+class ConfigItemLayout(QHBoxLayout):
+    def __init__(self, dialog: QDialog, config: dict, config_item_key: str):
+        super().__init__()
+        self.dialog = dialog
+        self.edit = QLineEdit(config.get(config_item_key, ""))
+        self.select_dir_btn = QPushButton()
+        self.select_dir_btn.clicked.connect(self.select_directory)
+        self.addWidget(self.edit)
+        self.addWidget(self.select_dir_btn)
+
+    def select_directory(self) -> None:
+        try:
+            dir_name, _ = QFileDialog.getExistingDirectory(self.dialog, "Select directory", "", QFileDialog.ShowDirsOnly)
+            self.edit.text = dir_name
+        except ValueError:
+            pass
 
 class ConfigDialog(QDialog):
     def __init__(self, config: dict, parent=None):
@@ -28,13 +44,14 @@ class ConfigDialog(QDialog):
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
-        self.clippings_edit = QLineEdit(config.get("clippings_path", "")) # TODO: use file dialogs
-        self.input_edit = QLineEdit(config.get("input_path", ""))
-        self.output_edit = QLineEdit(config.get("output_path", ""))
 
-        form.addRow("Clippings path:", self.clippings_edit)
-        form.addRow("Input path:", self.input_edit)
-        form.addRow("Output path:", self.output_edit)
+        self.clippings_layout = ConfigItemLayout(self, config, "clippings_path")
+        self.input_layout = ConfigItemLayout(self, config, "input_path")
+        self.output_layout = ConfigItemLayout(self, config, "output_path")
+
+        form.addRow("Clippings path:", self.clippings_layout)
+        form.addRow("Input path:", self.input_layout)
+        form.addRow("Output path:", self.output_layout)
 
         layout.addLayout(form)
 
@@ -52,9 +69,9 @@ class ConfigDialog(QDialog):
 
     def get_config(self) -> dict:
         """Return updated config (call only if accepted)."""
-        self._config["clippings_path"] = self.clippings_edit.text()
-        self._config["input_path"] = self.input_edit.text()
-        self._config["output_path"] = self.output_edit.text()
+        self._config["clippings_path"] = self.clippings_layout.edit.text()
+        self._config["input_path"] = self.input_layout.edit.text()
+        self._config["output_path"] = self.output_layout.edit.text()
         return self._config
     
 class MainWindow(QtWidgets.QWidget):
