@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 
 from .any2ebook import main as cli_main
-from .paths import user_config_dir, ensure_config_path, load_config, save_config
+from .config import user_config_dir, ensure_config_path, load_config, save_config
 from importlib.resources import files
 
 import yaml

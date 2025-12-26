@@ -6,7 +6,7 @@ import yaml
 
 from .create_obsidian_db import db_path
 from .html2ebook import create_epub_from_urls
-from .paths import ensure_config_path
+from .config import ensure_config_path
 
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
