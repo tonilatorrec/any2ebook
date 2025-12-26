@@ -2,6 +2,7 @@ import os
 import shutil
 from importlib.resources import files
 from pathlib import Path
+import yaml
 
 APP_NAME = "any2ebook"
 
@@ -28,7 +29,7 @@ def user_config_dir() -> Path:
         return base / APP_NAME
 
 
-def ensure_config() -> Path:
+def ensure_config_path() -> Path:
     """Ensures the user config file exists, otherwise copies from config_sample.yaml
     Returns the path to the user config file"""
     cfg_dir = user_config_dir()
@@ -38,3 +39,12 @@ def ensure_config() -> Path:
         default_cfg = files("any2ebook").joinpath("config_sample.yaml")
         shutil.copy(default_cfg, cfg)
     return cfg
+
+
+def load_config(cfg_path: Path) -> dict:
+    with open(cfg_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def save_config(cfg: dict, cfg_path: Path) -> None:
+    with open(cfg_path, 'w') as f:
+        yaml.dump(cfg, f)

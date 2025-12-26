@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 
 from .any2ebook import main as cli_main
-from .paths import user_config_dir, ensure_config
+from .paths import user_config_dir, ensure_config_path, load_config, save_config
 from importlib.resources import files
 
 import yaml
@@ -82,18 +82,17 @@ class MainWindow(QtWidgets.QWidget):
 
         self.path_to_config = user_config_dir() / "config.yaml"
         if not self.path_to_config.exists():
-            with open(files('any2ebook').joinpath('config_sample.yaml')) as f:
-                self.config = yaml.safe_load(f)
+            # load dummy config, then ask user to provide actual config
+            self.config = load_config(files('any2ebook').joinpath('config_sample.yaml'))
             self.show_prompt_ask_for_config()
         else:
-            with open(self.path_to_config, 'r') as f:
-                self.config = yaml.safe_load(f)
+            self.config = load_config(self.path_to_config)
 
         layout = QtWidgets.QVBoxLayout(self)
         self.generate_btn = QPushButton("Generate EPUB")
         self.generate_btn.clicked.connect(self.on_generate)
         self.config_btn = QPushButton("Config")
-        self.config_btn.clicked.connect(self.open_config)
+        self.config_btn.clicked.connect(self.open_config_dialog)
         layout.addWidget(self.generate_btn)
         layout.addWidget(self.config_btn)
     
@@ -104,20 +103,16 @@ class MainWindow(QtWidgets.QWidget):
         else:
             QMessageBox.critical(self, "Error", "Failed")
 
-    def open_config(self):
+    def open_config_dialog(self):
         dlg = ConfigDialog(self.config, self)
         if dlg.exec_() == dlg.Accepted:
             self.config = dlg.get_config()
-            self.save_config()
+            save_config(self.config, self.path_to_config) # TODO: self.path_to_config and self.config should be separate from the gui logic - in paths.py?
             # TODO: inform user when the config is not correct (e.g. clippings folder is not a valid path) - use pydantic?
 
-    def save_config(self):
-        with open(self.path_to_config, 'w') as f:
-            yaml.dump(self.config, f)
-
     def show_prompt_ask_for_config(self):
-        msg_box = QMessageBox.information(self, 'Information', "No configuration yet. Press OK to introduce config...", QMessageBox.StandardButton.Ok)
-        self.open_config()
+        QMessageBox.information(self, 'Information', "No configuration yet. Press OK to introduce config...", QMessageBox.StandardButton.Ok)
+        self.open_config_dialog()
 
 def run_gui():
     app = QtWidgets.QApplication(sys.argv)
