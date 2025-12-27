@@ -11,6 +11,9 @@ APP_NAME = "any2ebook"
 class ConfigNotFoundError(FileNotFoundError):
     pass
 
+class InvalidConfigError(Exception):
+    pass
+
 @dataclass(slots=True)
 class Config:
     # stable fields (known at dev time)
@@ -27,6 +30,7 @@ class Config:
         with open(path, 'r') as f:
             raw = yaml.safe_load(f) or {}
             # TODO: avoid Path('.') when the raw is ''
+            raise InvalidConfigError(path)
             return cls(
                 config_path=path,
                 clippings_path=Path(raw['clippings_path']) if raw.get('clippings_path') is not None else None,
