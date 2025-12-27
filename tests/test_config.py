@@ -5,6 +5,7 @@ from any2ebook.config import Config
 
 APP_NAME = "any2ebook"
 
+
 def test_valid_config_path():
     Config.load(files(APP_NAME).joinpath('config_sample.yaml'))
 
