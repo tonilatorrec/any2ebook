@@ -34,7 +34,7 @@ class Config:
                 output_path=Path(raw['output_path']) if raw.get('output_path') is not None else None
             )
 
-    def save(self, config_path: Path | None) -> None:
+    def save(self, config_path: Path | None = None) -> None:
         """Save to disk."""
         raw = asdict(self)
         out = dict()

@@ -70,50 +70,28 @@ def stage_and_convert(
         )
 
 def run(config: Config):
-    # TODO: get config from Config, not file
-    cfg_path = ensure_config_path()
     ids, urls = get_urls_to_convert(db_path())  # -> list[tuple[str]]
 
-    with open(cfg_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    # TODO: i commented it out because the inbox is not implemented yet
-    # inbox_path = config["inbox_path"]
-    # if inbox_path is None:
-    #     print("Inbox path not yet set. ", end="")
-    #     while True:
-    #         inbox_path = input("""Please set path:\n> """)
-    #         if os.path.exists(inbox_path):
-    #             break
-    #     config["inbox_path"] = inbox_path
-    # elif not os.path.exists(inbox_path):
-    #     print("Inbox path does not exist. ", end="")
-    #     while not os.path.exists(inbox_path):
-    #         inbox_path = input("""Please set valid path:\n> """)
-    #     config["inbox_path"] = inbox_path
-
-    output_path = config["output_path"]
-    if output_path is None:
+    _output_path = config.output_path
+    if _output_path is None:
         print("Output path not yet set. ", end="")
         while True:
-            output_path = input("""Please set path:\n> """)
-            if os.path.exists(output_path):
+            _output_path = input("""Please set path:\n> """)
+            if os.path.exists(_output_path):
                 break
-        config["output_path"] = output_path
-    elif not os.path.exists(output_path):
+        config.output_path = _output_path
+    elif not os.path.exists(_output_path):
         k = input("Output path does not exist. Create? [y/n]")
         os.makedirs(k)
-        config["output_path"] = output_path
+        config.output_path = _output_path
 
-    # update config
-    with open(cfg_path, "w") as f:
-        yaml.dump(config, f)
+    config.save()
 
-    staging_path = os.path.join(cfg_path.parent, "staging")
+    staging_path = os.path.join(config.config_path.parent, "staging")
     if not os.path.exists(staging_path):
         os.mkdir(staging_path)
 
-    stage_and_convert(ids, urls, db_path(), output_path, staging_path)
+    stage_and_convert(ids, urls, db_path(), _output_path, staging_path)
 
 def main():
     config = Config.load(ensure_config_path())

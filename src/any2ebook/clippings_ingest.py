@@ -136,31 +136,26 @@ def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_p
 
 
 def run(config: Config):
-    # TODO: get config from Config, not file
-    cfg_path = ensure_config_path()
-    with open(cfg_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    obsidian_clippings_path = config["clippings_path"]
-    if obsidian_clippings_path is None:
+    # TODO: should these checks run here or when setting up config?
+    _clippings_path = config.clippings_path
+    if _clippings_path is None:
         print("Obsidian clippings path not yet set. ", end="")
         while True:
-            obsidian_clippings_path = input("""Please set path:\n> """)
-            if os.path.exists(obsidian_clippings_path):
+            _clippings_path= input("""Please set path:\n> """)
+            if os.path.exists(_clippings_path):
                 break
-        config["clippings_path"] = obsidian_clippings_path
-    elif not os.path.exists(obsidian_clippings_path):
+        config.clippings_path = _clippings_path
+    elif not os.path.exists(_clippings_path):
         print("Obsidian clippings path does not exist. ", end="")
-        while not os.path.exists(obsidian_clippings_path):
-            obsidian_clippings_path = input("""Please set valid path:\n> """)
-        config["clippings_path"] = obsidian_clippings_path
+        while not os.path.exists(_clippings_path):
+            _clippings_path = input("""Please set valid path:\n> """)
+        config.clippings_path = _clippings_path
     else:
         pass
 
-    with open(cfg_path, "w") as f:
-        yaml.dump(config, f)
+    config.save()
 
-    files = find_clipping_files(obsidian_clippings_path)
+    files = find_clipping_files(config.clippings_path)
     for file in files:
         front_matter = read_front_matter(file)
         file_url = front_matter["source"]
