@@ -1,10 +1,10 @@
 import os
 import shutil
+from dataclasses import asdict, dataclass
 from importlib.resources import files
 from pathlib import Path
+
 import yaml
-from dataclasses import dataclass, asdict
-from typing import Any, Callable
 
 APP_NAME = "any2ebook"
 

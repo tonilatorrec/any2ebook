@@ -1,8 +1,7 @@
-from any2ebook.config import Config
-import pytest
 from importlib.resources import files
 from pathlib import Path
-import os
+
+from any2ebook.config import Config
 
 APP_NAME = "any2ebook"
 

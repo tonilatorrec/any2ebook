@@ -1,6 +1,7 @@
 from . import clippings_ingest, clippings_to_epub
 from .config import Config, ensure_config_path
 
+
 def run(config: Config):
     try:
         clippings_ingest.run(config)
