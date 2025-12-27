@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import yaml
 
 from .create_obsidian_db import db_path
-from .paths import ensure_config
+from .config import Config, ensure_config_path
 
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
@@ -135,37 +135,36 @@ def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_p
         return int(row[0])
 
 
-def main():
-    cfg_path = ensure_config()
-    with open(cfg_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    obsidian_clippings_path = config["clippings_path"]
-    if obsidian_clippings_path is None:
+def run(config: Config):
+    # TODO: should these checks run here or when setting up config?
+    _clippings_path = config.clippings_path
+    if _clippings_path is None:
         print("Obsidian clippings path not yet set. ", end="")
         while True:
-            obsidian_clippings_path = input("""Please set path:\n> """)
-            if os.path.exists(obsidian_clippings_path):
+            _clippings_path= input("""Please set path:\n> """)
+            if os.path.exists(_clippings_path):
                 break
-        config["clippings_path"] = obsidian_clippings_path
-    elif not os.path.exists(obsidian_clippings_path):
+        config.clippings_path = _clippings_path
+    elif not os.path.exists(_clippings_path):
         print("Obsidian clippings path does not exist. ", end="")
-        while not os.path.exists(obsidian_clippings_path):
-            obsidian_clippings_path = input("""Please set valid path:\n> """)
-        config["clippings_path"] = obsidian_clippings_path
+        while not os.path.exists(_clippings_path):
+            _clippings_path = input("""Please set valid path:\n> """)
+        config.clippings_path = _clippings_path
     else:
         pass
 
-    with open(cfg_path, "w") as f:
-        yaml.dump(config, f)
+    config.save()
 
-    files = find_clipping_files(obsidian_clippings_path)
+    files = find_clipping_files(config.clippings_path)
     for file in files:
         front_matter = read_front_matter(file)
         file_url = front_matter["source"]
         normalized_file_url = hash_url(file_url)
         upsert_item(db_path(), front_matter, normalized_file_url, file)
 
+def main():
+    config = Config.load(ensure_config_path())
+    run(config)
 
 if __name__ == "__main__":
     main()
