@@ -6,9 +6,12 @@ from PyQt5.QtWidgets import (
     QLineEdit, QPushButton, QHBoxLayout, QMessageBox, QFileDialog
 )
 
-from .any2ebook import main as cli_main
-from .config import user_config_dir, ensure_config_path, load_config, save_config
+from .any2ebook import run as cli_run
+from .config import user_config_dir, ensure_config_path, Config
 from importlib.resources import files
+
+from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -18,10 +21,10 @@ class SuccessWindow(QtWidgets.QWidget):
         self.resize
 
 class ConfigItemLayout(QHBoxLayout):
-    def __init__(self, dialog: QDialog, config: dict, config_item_key: str):
+    def __init__(self, dialog: QDialog, value: Any = None):
         super().__init__()
         self.dialog = dialog
-        self.edit = QLineEdit(config.get(config_item_key, ""))
+        self.edit = QLineEdit(str(value) if value is not None else None)
         self.select_dir_btn = QPushButton()
         self.select_dir_btn.clicked.connect(self.select_directory)
         self.addWidget(self.edit)
@@ -35,19 +38,19 @@ class ConfigItemLayout(QHBoxLayout):
             pass
 
 class ConfigDialog(QDialog):
-    def __init__(self, config: dict, parent=None):
+    def __init__(self, config: Config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Configuration")
 
-        self._config = config.copy()   # work on a copy
+        self.config = config   # work on a copy
 
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
 
-        self.clippings_layout = ConfigItemLayout(self, config, "clippings_path")
-        self.input_layout = ConfigItemLayout(self, config, "input_path")
-        self.output_layout = ConfigItemLayout(self, config, "output_path")
+        self.clippings_layout = ConfigItemLayout(self, self.config.clippings_path)
+        self.input_layout = ConfigItemLayout(self, self.config.input_path)
+        self.output_layout = ConfigItemLayout(self, self.config.output_path)
 
         form.addRow("Clippings path:", self.clippings_layout)
         form.addRow("Input path:", self.input_layout)
@@ -67,12 +70,12 @@ class ConfigDialog(QDialog):
         buttons.addWidget(cancel_btn)
         layout.addLayout(buttons)
 
-    def get_config(self) -> dict:
+    def get_config(self) -> None:
         """Return updated config (call only if accepted)."""
-        self._config["clippings_path"] = self.clippings_layout.edit.text()
-        self._config["input_path"] = self.input_layout.edit.text()
-        self._config["output_path"] = self.output_layout.edit.text()
-        return self._config
+        # TODO improve syntax
+        self.config.clippings_path = Path(self.clippings_layout.edit.text()) if self.clippings_layout.edit.text() != "" else None
+        self.config.input_path = Path(self.input_layout.edit.text()) if self.input_layout.edit.text() != "" else None
+        self.config.output_path = Path(self.output_layout.edit.text()) if self.output_layout.edit.text() != "" else None
     
 class MainWindow(QtWidgets.QWidget):
     def __init__(self):
@@ -81,12 +84,13 @@ class MainWindow(QtWidgets.QWidget):
         self.resize(300, 200)
 
         self.path_to_config = user_config_dir() / "config.yaml"
+
         if not self.path_to_config.exists():
             # load dummy config, then ask user to provide actual config
-            self.config = load_config(files('any2ebook').joinpath('config_sample.yaml'))
+            self.config = Config.load(Path(files('any2ebook').joinpath('config_sample.yaml')))
             self.show_prompt_ask_for_config()
         else:
-            self.config = load_config(self.path_to_config)
+            self.config = Config.load(Path(self.path_to_config))
 
         layout = QtWidgets.QVBoxLayout(self)
         self.generate_btn = QPushButton("Generate EPUB")
@@ -97,7 +101,7 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.config_btn)
     
     def on_generate(self):
-        success = cli_main()
+        success = cli_run(self.config)
         if success:
             QMessageBox.information(self, "Success", "Success!")
         else:
@@ -106,8 +110,8 @@ class MainWindow(QtWidgets.QWidget):
     def open_config_dialog(self):
         dlg = ConfigDialog(self.config, self)
         if dlg.exec_() == dlg.Accepted:
-            self.config = dlg.get_config()
-            save_config(self.config, self.path_to_config) # TODO: self.path_to_config and self.config should be separate from the gui logic - in paths.py?
+            dlg.get_config()
+            self.config.save(self.path_to_config)
             # TODO: inform user when the config is not correct (e.g. clippings folder is not a valid path) - use pydantic?
 
     def show_prompt_ask_for_config(self):

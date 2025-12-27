@@ -6,7 +6,7 @@ import yaml
 
 from .create_obsidian_db import db_path
 from .html2ebook import create_epub_from_urls
-from .config import ensure_config_path
+from .config import Config, ensure_config_path
 
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
@@ -69,8 +69,8 @@ def stage_and_convert(
             id_list,
         )
 
-
-def main():
+def run(config: Config):
+    # TODO: get config from Config, not file
     cfg_path = ensure_config_path()
     ids, urls = get_urls_to_convert(db_path())  # -> list[tuple[str]]
 
@@ -115,6 +115,9 @@ def main():
 
     stage_and_convert(ids, urls, db_path(), output_path, staging_path)
 
+def main():
+    config = Config.load(ensure_config_path())
+    run(config)
 
 if __name__ == "__main__":
     main()

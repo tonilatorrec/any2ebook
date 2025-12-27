@@ -3,14 +3,59 @@ import shutil
 from importlib.resources import files
 from pathlib import Path
 import yaml
+from dataclasses import dataclass, asdict
+from typing import Any, Callable
 
 APP_NAME = "any2ebook"
 
+class ConfigNotFoundError(FileNotFoundError):
+    pass
+
+@dataclass(slots=True)
+class Config:
+    # stable fields (known at dev time)
+    config_path: Path
+    clippings_path: Path | None = None
+    input_path: Path | None = None
+    output_path: Path | None = None
+
+    @classmethod
+    def load(cls, path: Path | None) -> "Config":
+        """Load config from disk"""
+        if not path.exists():
+            raise ConfigNotFoundError(path)
+        with open(path, 'r') as f:
+            raw = yaml.safe_load(f) or {}
+            # TODO: avoid Path('.') when the raw is ''
+            return cls(
+                config_path=path,
+                clippings_path=Path(raw['clippings_path']) if raw.get('clippings_path') is not None else None,
+                input_path=Path(raw['input_path']) if raw.get('input_path') is not None else None,
+                output_path=Path(raw['output_path']) if raw.get('output_path') is not None else None
+            )
+
+    def save(self, config_path: Path | None) -> None:
+        """Save to disk."""
+        raw = asdict(self)
+        out = dict()
+        # TODO: create constant for all keys to be saved in config file
+        for k in ('clippings_path', 'input_path', 'output_path'): 
+            out[k] = str(raw[k]) if raw[k] is not None else None
+        if config_path is None:
+            with open(self.config_path, 'w') as f:
+                yaml.dump(out, f)
+        else:
+            with open(config_path, 'w') as f:
+                yaml.dump(out, f)         
+                self.config_path = config_path 
+
+    def validate(self) -> None:
+        # TODO: implement?
+        pass
 
 def _override_root() -> Path | None:
     v = os.environ.get("ANY2EBOOK_HOME")
     return Path(v).expanduser().resolve() if v else None
-
 
 def user_config_dir() -> Path:
     """Get conventional config dir based on OS"""
@@ -41,10 +86,3 @@ def ensure_config_path() -> Path:
     return cfg
 
 
-def load_config(cfg_path: Path) -> dict:
-    with open(cfg_path, 'r') as f:
-        return yaml.safe_load(f)
-
-def save_config(cfg: dict, cfg_path: Path) -> None:
-    with open(cfg_path, 'w') as f:
-        yaml.dump(cfg, f)
