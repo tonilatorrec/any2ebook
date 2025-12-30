@@ -20,15 +20,15 @@ class Config:
     output_path: Path | None = None
 
     @classmethod
-    def load(cls, path: Path | None) -> "Config":
-        """Load config from disk"""
+    def load(cls, path: os.PathLike | None) -> "Config":
+        """Load config from disk."""
         if not path.exists():
             raise ConfigNotFoundError(path)
         with open(path, 'r') as f:
             raw = yaml.safe_load(f) or {}
             # TODO: avoid Path('.') when the raw is ''
             return cls(
-                config_path=path,
+                config_path=Path(path),
                 clippings_path=Path(raw['clippings_path']) if raw.get('clippings_path') is not None else None,
                 input_path=Path(raw['input_path']) if raw.get('input_path') is not None else None,
                 output_path=Path(raw['output_path']) if raw.get('output_path') is not None else None
