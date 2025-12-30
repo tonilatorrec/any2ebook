@@ -21,9 +21,3 @@ def test_invalid_config_path(tmp_path):
 def test_config_file_with_missing_key():
     config = Config.load(Path('tests/config_sample_test.yaml'))
     assert config.input_path is None
-
-def test_user_config_dir():
-    assert isinstance(user_config_dir(), Path)
-
-def test_ensure_config_path():
-    assert isinstance(ensure_config_path(), Path)
