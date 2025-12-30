@@ -1,19 +1,23 @@
 import sys
-
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QHBoxLayout, QMessageBox, QFileDialog
-)
-
-from .any2ebook import run as cli_run
-from .config import user_config_dir, ensure_config_path, Config
 from importlib.resources import files
-
 from pathlib import Path
 from typing import Any
 
-import yaml
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
+
+from .any2ebook import run as cli_run
+from .config import Config, user_config_dir
+
 
 class SuccessWindow(QtWidgets.QWidget):
     def __init__(self):

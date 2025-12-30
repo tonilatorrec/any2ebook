@@ -7,7 +7,7 @@ update-deps:
 
 build:
 	uv run pyinstaller -F -n any2ebook_cli src/any2ebook/any2ebook.py
-	uv run pyinstaller -F -w -n any2ebook src/any2ebook/gui.py
+	uv run pyinstaller -F -w -n any2ebook --paths src --collect-data any2ebook=*.yaml run_gui.py          
 
 .PHONY: test
 test:

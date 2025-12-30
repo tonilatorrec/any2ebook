@@ -2,11 +2,9 @@ import datetime
 import os
 import sqlite3
 
-import yaml
-
+from .config import Config, ensure_config_path
 from .create_obsidian_db import db_path
 from .html2ebook import create_epub_from_urls
-from .config import Config, ensure_config_path
 
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:

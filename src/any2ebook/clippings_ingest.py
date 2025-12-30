@@ -6,8 +6,8 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import yaml
 
-from .create_obsidian_db import db_path
 from .config import Config, ensure_config_path
+from .create_obsidian_db import db_path
 
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
