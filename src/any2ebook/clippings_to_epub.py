@@ -3,7 +3,7 @@ import os
 import sqlite3
 
 from .config import Config, ensure_config_path
-from .create_obsidian_db import db_path
+from .db import ensure_db_path
 from .html2ebook import create_epub_from_urls
 
 
@@ -68,7 +68,7 @@ def stage_and_convert(
         )
 
 def run(config: Config):
-    ids, urls = get_urls_to_convert(db_path())  # -> list[tuple[str]]
+    ids, urls = get_urls_to_convert(ensure_db_path())  # -> list[tuple[str]]
 
     _output_path = config.output_path
     if _output_path is None:
@@ -89,7 +89,7 @@ def run(config: Config):
     if not os.path.exists(staging_path):
         os.mkdir(staging_path)
 
-    stage_and_convert(ids, urls, db_path(), _output_path, staging_path)
+    stage_and_convert(ids, urls, ensure_db_path(), _output_path, staging_path)
 
 def main():
     config = Config.load(ensure_config_path())

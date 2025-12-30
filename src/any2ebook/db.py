@@ -17,14 +17,14 @@ def user_data_dir(app: str = APP_NAME) -> Path:
         return base / app
 
 
-def db_path() -> Path:
-    d = user_data_dir()
+def ensure_db_path(base_dir: Path | None = None) -> Path:
+    d = base_dir or user_data_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d / "obsidian.db"
 
 
 def main():
-    db = db_path()
+    db = ensure_db_path()
     conn = sqlite3.connect(db)  # will create db if it does not exist
     cursor = conn.cursor()
 

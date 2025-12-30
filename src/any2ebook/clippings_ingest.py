@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import yaml
 
 from .config import Config, ensure_config_path
-from .create_obsidian_db import db_path
+from .db import ensure_db_path
 
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
@@ -160,7 +160,7 @@ def run(config: Config):
         front_matter = read_front_matter(file)
         file_url = front_matter["source"]
         normalized_file_url = hash_url(file_url)
-        upsert_item(db_path(), front_matter, normalized_file_url, file)
+        upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
 
 def main():
     config = Config.load(ensure_config_path())
