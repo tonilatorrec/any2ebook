@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from any2ebook.config import Config, ConfigNotFoundError, ensure_config_path, user_config_dir
+from any2ebook.config import Config, ConfigNotFoundError
 
 APP_NAME = "any2ebook"
 

@@ -17,7 +17,7 @@ def extract_website_content(url):
     response.encoding = "utf-8"
 
     response.raise_for_status()
-    print(response.text)
+    # print(response.text)
     readable = simple_json_from_html_string(response.text, url)
     return {"title": readable.get("title", ""), "content": readable.get("content", "")}
 
@@ -51,6 +51,7 @@ def create_epub_from_urls(urls, output_filename):
     book.add_author("Unknown")
     chapters = []
     toc = []
+    added_items = 0
     for idx, url in enumerate(urls):
         try:
             content = extract_website_content(url)
@@ -62,6 +63,7 @@ def create_epub_from_urls(urls, output_filename):
             book.add_item(chapter)
             chapters.append(chapter)
             toc.append(epub.Link(f"chap_{idx + 1}.xhtml", title, f"chap{idx + 1}"))
+            added_items += 1
         except Exception as e:
             print(f"Failed to process {url}: {e}")
     book.toc = tuple(toc)
@@ -69,3 +71,5 @@ def create_epub_from_urls(urls, output_filename):
     book.add_item(epub.EpubNav())
     book.spine = ["nav"] + chapters
     epub.write_epub(output_filename, book)
+
+    print(f"✔ Created epub in {str(output_filename)} with {added_items} items.")

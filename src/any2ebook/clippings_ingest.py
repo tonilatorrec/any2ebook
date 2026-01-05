@@ -156,11 +156,17 @@ def run(config: Config):
     config.save()
 
     files = find_clipping_files(config.clippings_path)
+    upserted_items = 0
     for file in files:
-        front_matter = read_front_matter(file)
-        file_url = front_matter["source"]
-        normalized_file_url = hash_url(file_url)
-        upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
+        try:
+            upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
+            front_matter = read_front_matter(file)
+            file_url = front_matter["source"]
+            normalized_file_url = hash_url(file_url)
+            upserted_items += 1
+        except:
+            continue
+    print(f"✔ Upserted {upserted_items} items.")
 
 def main():
     config = Config.load(ensure_config_path())
