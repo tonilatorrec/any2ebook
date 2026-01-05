@@ -6,6 +6,9 @@ from .config import Config, ensure_config_path
 from .db import ensure_db_path
 from .html2ebook import create_epub_from_urls
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
     """Staging"""

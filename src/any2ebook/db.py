@@ -28,6 +28,7 @@ def main():
     conn = sqlite3.connect(db)  # will create db if it does not exist
     cursor = conn.cursor()
 
+    # TODO: add source (obsidian_clipping) instead of obsidian path ? as a string or a enum -> separate table?
     # create "items" table which stores information about the clippings
     cursor.execute(
         """

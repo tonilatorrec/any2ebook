@@ -3,12 +3,14 @@ import os
 import sqlite3
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import logging
 
 import yaml
 
 from .config import Config, ensure_config_path
 from .db import ensure_db_path
 
+logger = logging.getLogger(__name__)
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
     """
@@ -123,12 +125,12 @@ def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_p
                 "url": item_front_matter["source"],
                 "url_hash": url_hash,
                 "obsidian_path": str(md_file_path),
-                "title": item_front_matter["title"],
+                "title": item_front_matter["title"], # TODO: if it does not exist, get some dummy title or the url
                 "author": None
                 if item_front_matter["author"] is None
                 else item_front_matter["author"][0].strip("[[").strip("]]"),
-                "published": item_front_matter["published"],
-                "created": item_front_matter["created"],
+                "published": item_front_matter["published"], # TODO: make it nullable
+                "created": item_front_matter["created"],     # TODO: make it nullable
             },
         )
         row = cur.fetchone()
@@ -166,7 +168,7 @@ def run(config: Config):
             upserted_items += 1
         except:
             continue
-    print(f"✔ Upserted {upserted_items} items.")
+    logging.info(f"✔ Upserted {upserted_items} items.")
 
 def main():
     config = Config.load(ensure_config_path())

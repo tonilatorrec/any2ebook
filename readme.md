@@ -2,6 +2,12 @@
 
 Converts [Obsidian clippings](https://obsidian.md/clipper) to epub files to be read in ebook readers
 
+Obsidian clipping files should have the following properties in the YAML front matter, which are included in the default template:
+- `title`
+- `source` which should be the clipping URL
+- `published` 
+- `created`
+
 ## Setup
 Install using `uv`:
 ```
