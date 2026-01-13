@@ -9,13 +9,14 @@ from .html2ebook import create_epub_from_urls
 import logging
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 def get_urls_to_convert(path_to_db: str) -> list[str]:
     """Staging"""
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
     cur = conn.cursor()
     with conn:
-        query = cur.execute('SELECT id, url FROM items WHERE status IN ("new", "failed")')
+        query = cur.execute('SELECT id, url FROM items WHERE status IN ("new", "failed") AND attempts < 3')
         res = query.fetchall()
 
         ids = [r[0] for r in res]

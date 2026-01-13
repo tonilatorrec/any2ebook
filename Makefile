@@ -17,3 +17,7 @@ test:
 lint: 
 	uv run ruff check ./src ./tests --fix
 	uv run ruff format ./src ./tests
+
+.PHONY: upgrade
+upgrade:
+	uv tool upgrade any2ebook

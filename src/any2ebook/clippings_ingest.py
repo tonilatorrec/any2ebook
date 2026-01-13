@@ -11,6 +11,7 @@ from .config import Config, ensure_config_path
 from .db import ensure_db_path
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
     """
@@ -93,7 +94,7 @@ def hash_url(url: str) -> str:
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()
 
 
-def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_path: str):
+def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_path: str) -> int:
     """
     Insert-or-update an item keyed by url_hash.
     - Does NOT change status/attempts during scans; only refreshes light metadata + last_seen.
@@ -161,14 +162,13 @@ def run(config: Config):
     upserted_items = 0
     for file in files:
         try:
-            upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
             front_matter = read_front_matter(file)
             file_url = front_matter["source"]
             normalized_file_url = hash_url(file_url)
+            upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
             upserted_items += 1
         except:
             continue
-    logging.info(f"✔ Upserted {upserted_items} items.")
 
 def main():
     config = Config.load(ensure_config_path())
