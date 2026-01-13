@@ -1,9 +1,9 @@
 import hashlib
+import logging
 import os
 import sqlite3
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-import logging
 
 import yaml
 

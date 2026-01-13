@@ -1,13 +1,11 @@
 import datetime
+import logging
+import os
+import sqlite3
 
 import requests
 from ebooklib import epub
 from readabilipy import simple_json_from_html_string
-
-import os
-
-import logging
-import sqlite3
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
