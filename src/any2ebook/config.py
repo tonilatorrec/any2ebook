@@ -78,6 +78,8 @@ def ensure_config_path() -> Path:
     """Ensures the user config file exists, otherwise copies from config_sample.yaml
     Returns the path to the user config file"""
     cfg_dir = user_config_dir()
+    if not cfg_dir.exists():
+        os.makedirs(cfg_dir)
     cfg = cfg_dir / "config.yaml"
     if not cfg.exists():
         print(f"Creating {APP_NAME} config file")
