@@ -138,7 +138,7 @@ def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_p
         return int(row[0])
 
 
-def run(config: Config):
+def run(config: Config, dry_run: bool = False) -> dict:
     # TODO: should these checks run here or when setting up config?
     _clippings_path = config.clippings_path
     if _clippings_path is None:
@@ -159,16 +159,25 @@ def run(config: Config):
     config.save()
 
     files = find_clipping_files(config.clippings_path)
-    upserted_items = 0
+    ready_items = 0
+    warnings = 0
     for file in files:
         try:
             front_matter = read_front_matter(file)
+            if not front_matter or "source" not in front_matter or not front_matter["source"]:
+                warnings += 1
+                logger.warning("Missing source front matter in %s", file)
+                continue
             file_url = front_matter["source"]
             normalized_file_url = hash_url(file_url)
-            upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
-            upserted_items += 1
-        except:
+            if not dry_run:
+                upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
+            ready_items += 1
+        except Exception as e:
+            warnings += 1
+            logger.warning("Failed to parse front matter in %s: %s", file, e)
             continue
+    return {"ready_items": ready_items, "warnings": warnings}
 
 def main():
     config = Config.load(ensure_config_path())
