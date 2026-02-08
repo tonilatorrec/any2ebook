@@ -1,7 +1,5 @@
 import datetime
 import logging
-import os
-import sqlite3
 
 import requests
 from ebooklib import epub
@@ -49,7 +47,7 @@ def html_to_epub(title, html_content, output_filename):
     epub.write_epub(output_filename, book)
 
 
-def create_epub_from_urls(urls, output_filename, path_to_db: os.PathLike | None = None):
+def create_epub_from_urls(urls, output_filename, path_to_db=None):
     added_items = 0
     if len(urls) > 0:
         date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -58,17 +56,6 @@ def create_epub_from_urls(urls, output_filename, path_to_db: os.PathLike | None 
         book.add_author("Unknown")
         chapters = []
         toc = []
-
-        if path_to_db:
-            try:
-                conn = sqlite3.connect(path_to_db)
-                cur = conn.cursor()
-            except:
-                conn = None
-                cur = None
-        else:
-            conn = None
-            cur = None
 
         for idx, url in enumerate(urls):
             try:
@@ -82,31 +69,9 @@ def create_epub_from_urls(urls, output_filename, path_to_db: os.PathLike | None 
                 chapters.append(chapter)
                 toc.append(epub.Link(f"chap_{idx + 1}.xhtml", title, f"chap{idx + 1}"))
                 added_items += 1
-                # Set item as converted
-                if cur is not None:
-                    cur.execute(
-                        "UPDATE items SET status = 'converted' WHERE url = (?)", url,
-                    )
                 logging.info(f"Added {url}.")
             except Exception as e:
                 logging.warning(f"Failed to process {url}: {e}")
-                # Set item as failed so that it can be processed later
-                # if it fails more than three times then we will discard it
-                if cur is not None:
-                    # get number of attempts
-                    res = cur.execute(
-                        "SELECT attempts FROM items WHERE url = (?)", url,
-                    )
-                    attempts = int(res.fetchone())
-                    cur.execute(
-                        f"""
-                        UPDATE items SET 
-                            status = 'failed',
-                            attempts = {attempts + 1}
-                        WHERE url = (?)
-                        """, url,
-                    )
-
 
         book.toc = tuple(toc)
         book.add_item(epub.EpubNcx())

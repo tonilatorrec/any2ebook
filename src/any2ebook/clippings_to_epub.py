@@ -4,30 +4,33 @@ import os
 import sqlite3
 
 from .config import Config, ensure_config_path
-from .db import ensure_db_path
+from .db import ensure_db_path, migrate_db
 from .html2ebook import create_epub_from_urls
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def get_urls_to_convert(path_to_db: str) -> list[str]:
-    """Staging"""
+def get_urls_to_convert(path_to_db: str) -> tuple[list[int], list[str]]:
+    """Pick URL payloads that were not yet converted in previous runs."""
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
     cur = conn.cursor()
     with conn:
-        query = cur.execute('SELECT id, url FROM items WHERE status IN ("new", "failed") AND attempts < 3')
+        query = cur.execute(
+            """
+            SELECT i.id, i.payload_ref
+            FROM items i
+            WHERE i.payload_type = 'url'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM run_items ri
+                  WHERE ri.item_id = i.id AND ri.action = 'converted'
+              )
+            """
+        )
         res = query.fetchall()
 
         ids = [r[0] for r in res]
         urls = [r[1] for r in res]
-
-        # Save changes
-        conn.execute(
-            f"""
-            UPDATE items SET status = 'staged' WHERE id IN ({",".join("?" * len(ids))});
-            """,
-            ids,
-        )
     return ids, urls
 
 
@@ -60,18 +63,26 @@ def stage_and_convert(
 
     create_epub_from_urls(url_list, output_path)
 
-    # Save changes in Obsidian database
+    # Persist conversion markers through run/run_items.
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
     with conn:
-        conn.execute(
-            f"""
-            UPDATE items SET status = 'converted' WHERE id IN ({",".join("?" * len(id_list))});
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO runs(run_at, total_found, total_new, total_converted, total_failed)
+            VALUES (?, ?, NULL, ?, NULL)
             """,
-            id_list,
+            (datetime.datetime.now().isoformat(), len(id_list), len(id_list)),
+        )
+        run_id = int(cur.lastrowid)
+        cur.executemany(
+            "INSERT INTO run_items(run_id, item_id, action) VALUES (?, ?, 'converted')",
+            [(run_id, item_id) for item_id in id_list],
         )
 
 def run(config: Config):
-    ids, urls = get_urls_to_convert(ensure_db_path())  # -> list[tuple[str]]
+    db_path = migrate_db(ensure_db_path())
+    ids, urls = get_urls_to_convert(db_path)  # -> list[tuple[str]]
 
     _output_path = config.output_path
     if _output_path is None:
@@ -92,7 +103,7 @@ def run(config: Config):
     if not os.path.exists(staging_path):
         os.mkdir(staging_path)
 
-    stage_and_convert(ids, urls, ensure_db_path(), _output_path, staging_path)
+    stage_and_convert(ids, urls, db_path, _output_path, staging_path)
 
 def main():
     config = Config.load(ensure_config_path())

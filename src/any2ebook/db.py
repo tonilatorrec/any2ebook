@@ -1,9 +1,11 @@
 import os
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 APP_NAME = "any2ebook"
+LATEST_SCHEMA_VERSION = 2
 
 
 def user_data_dir(app: str = APP_NAME) -> Path:
@@ -23,47 +25,36 @@ def ensure_db_path(base_dir: Path | None = None) -> Path:
     return d / "obsidian.db"
 
 
-def main():
-    db = ensure_db_path()
-    conn = sqlite3.connect(db)  # will create db if it does not exist
-    cursor = conn.cursor()
-
-    # TODO: add source (obsidian_clipping) instead of obsidian path ? as a string or a enum -> separate table?
-    # create "items" table which stores information about the clippings
-    cursor.execute(
+def _create_items_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
         """
-        create table items(
+        CREATE TABLE items(
             id INTEGER PRIMARY KEY,
-            url TEXT NOT NULL UNIQUE,
-            url_hash TEXT NOT NULL UNIQUE,
-            obsidian_path TEXT NOT NULL,
-            status TEXT NOT NULL,
-            title TEXT,
-            author TEXT,
-            published TEXT,
-            created TEXT,
-            attempts INTEGER NOT NULL,
-            last_error TEXT
+            captured_at TEXT NOT NULL,
+            payload_ref TEXT NOT NULL UNIQUE,
+            payload_type TEXT NOT NULL,
+            source TEXT NOT NULL
         )
         """
     )
 
-    cursor.execute(
+def _create_aux_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
         """
-        create table runs(
+        CREATE TABLE IF NOT EXISTS runs(
             id INTEGER PRIMARY KEY,
             run_at TEXT NOT NULL,
             total_found INTEGER,
             total_new INTEGER,
-            total converted INTEGER,
+            total_converted INTEGER,
             total_failed INTEGER
         )
         """
     )
 
-    cursor.execute(
+    conn.execute(
         """
-        create table run_items(
+        CREATE TABLE IF NOT EXISTS run_items(
             run_id INTEGER,
             item_id INTEGER,
             action TEXT,
@@ -72,6 +63,122 @@ def main():
         )
         """
     )
+
+
+def _create_schema_v2(conn: sqlite3.Connection) -> None:
+    _create_items_table(conn)
+    _create_aux_tables(conn)
+
+
+def _has_items_table(conn: sqlite3.Connection) -> bool:
+    cur = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='items'")
+    return cur.fetchone() is not None
+
+
+def _has_any_user_table(conn: sqlite3.Connection) -> bool:
+    cur = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+    )
+    return cur.fetchone() is not None
+
+
+def _items_columns(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute("PRAGMA table_info(items)").fetchall()
+    return [row[1] for row in rows]
+
+
+def _is_v1_items_schema(conn: sqlite3.Connection) -> bool:
+    cols = set(_items_columns(conn))
+    return {
+        "url",
+        "url_hash",
+        "obsidian_path",
+        "status",
+        "attempts",
+    }.issubset(cols)
+
+
+def _is_v2_items_schema(conn: sqlite3.Connection) -> bool:
+    cols = set(_items_columns(conn))
+    return {"captured_at", "payload_ref", "payload_type", "source"}.issubset(cols)
+
+
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executescript(
+        f"""
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        ALTER TABLE items RENAME TO items_v1_backup;
+        CREATE TABLE items(
+            id INTEGER PRIMARY KEY,
+            captured_at TEXT NOT NULL,
+            payload_ref TEXT NOT NULL UNIQUE,
+            payload_type TEXT NOT NULL,
+            source TEXT NOT NULL
+        );
+        INSERT INTO items(
+            id, captured_at, payload_ref, payload_type, source
+        )
+        SELECT
+            id,
+            COALESCE(created, '{now}'),
+            url,
+            'url',
+            COALESCE(obsidian_path, 'obsidian_clipping')
+        FROM items_v1_backup;
+        DROP TABLE items_v1_backup;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+    _create_aux_tables(conn)
+
+
+def migrate_db(db_path: Path | None = None) -> Path:
+    db = ensure_db_path() if db_path is None else Path(db_path)
+    conn = sqlite3.connect(db)
+    try:
+        version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+        if version == 0:
+            if not _has_any_user_table(conn):
+                _create_schema_v2(conn)
+                conn.execute(f"PRAGMA user_version = {LATEST_SCHEMA_VERSION}")
+                conn.commit()
+                return db
+
+            if _has_items_table(conn) and _is_v1_items_schema(conn):
+                version = 1
+            elif _has_items_table(conn) and _is_v2_items_schema(conn):
+                version = 2
+            else:
+                _create_schema_v2(conn)
+                conn.execute(f"PRAGMA user_version = {LATEST_SCHEMA_VERSION}")
+                conn.commit()
+                return db
+
+        if version == 1:
+            _migrate_v1_to_v2(conn)
+            conn.execute("PRAGMA user_version = 2")
+            conn.commit()
+            return db
+
+        if version == 2:
+            _create_aux_tables(conn)
+            conn.execute("PRAGMA user_version = 2")
+            conn.commit()
+            return db
+
+        raise RuntimeError(
+            f"Unsupported database schema version {version}. Latest supported is {LATEST_SCHEMA_VERSION}."
+        )
+    finally:
+        conn.close()
+
+
+def main():
+    migrate_db()
 
 
 if __name__ == "__main__":

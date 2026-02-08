@@ -1,14 +1,14 @@
-import hashlib
 import logging
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import yaml
 
 from .config import Config, ensure_config_path
-from .db import ensure_db_path
+from .db import ensure_db_path, migrate_db
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -88,16 +88,11 @@ def normalize_url(url: str) -> str:
     return urlunparse((scheme, netloc, path, "", clean_query, ""))
 
 
-def hash_url(url: str) -> str:
-    """Return a short stable SHA1 hash of the normalized URL."""
-    norm = normalize_url(url)
-    return hashlib.sha1(norm.encode("utf-8")).hexdigest()
-
-
-def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_path: str) -> int:
+def upsert_item(
+    db_path: Path, item_front_matter: dict, payload_ref: str, md_file_path: str | None
+) -> int:
     """
-    Insert-or-update an item keyed by url_hash.
-    - Does NOT change status/attempts during scans; only refreshes light metadata + last_seen.
+    Insert-or-update an item keyed by payload_ref.
     - Returns the integer primary-key id of the row.
     """
 
@@ -105,33 +100,24 @@ def upsert_item(db_path: Path, item_front_matter: dict, url_hash: str, md_file_p
     cur = conn.cursor()
     sql_query = """
     INSERT INTO items (
-        url, url_hash, obsidian_path, status, title, author, published,
-        created, attempts, last_error
+        captured_at, payload_ref, payload_type, source
     ) VALUES (
-        :url, :url_hash, :obsidian_path, "new", :title, :author,
-        :published, :created, 0, NULL
+        :captured_at, :payload_ref, :payload_type, :source
     )
-    ON CONFLICT(url_hash) DO UPDATE SET
-        title = COALESCE(excluded.title, items.title),
-        author = COALESCE(excluded.author, items.author),
-        published = COALESCE(excluded.published, items.published),
-        created = COALESCE(excluded.created, items.created),
-        obsidian_path = excluded.obsidian_path
+    ON CONFLICT(payload_ref) DO UPDATE SET
+        source = excluded.source
     RETURNING id;
     """
+    captured_at = item_front_matter.get("created") or datetime.now(timezone.utc).isoformat()
+
     with conn:
         cur.execute(
             sql_query,
             {
-                "url": item_front_matter["source"],
-                "url_hash": url_hash,
-                "obsidian_path": str(md_file_path),
-                "title": item_front_matter["title"], # TODO: if it does not exist, get some dummy title or the url
-                "author": None
-                if item_front_matter["author"] is None
-                else item_front_matter["author"][0].strip("[[").strip("]]"),
-                "published": item_front_matter["published"], # TODO: make it nullable
-                "created": item_front_matter["created"],     # TODO: make it nullable
+                "captured_at": captured_at,
+                "payload_ref": payload_ref,
+                "payload_type": "url",
+                "source": str(md_file_path) if md_file_path is not None else "raw_text",
             },
         )
         row = cur.fetchone()
@@ -158,6 +144,7 @@ def run(config: Config, dry_run: bool = False) -> dict:
 
     config.save()
 
+    db_path = migrate_db(ensure_db_path())
     files = find_clipping_files(config.clippings_path)
     ready_items = 0
     warnings = 0
@@ -169,9 +156,9 @@ def run(config: Config, dry_run: bool = False) -> dict:
                 logger.warning("Missing source front matter in %s", file)
                 continue
             file_url = front_matter["source"]
-            normalized_file_url = hash_url(file_url)
+            normalized_file_url = normalize_url(file_url)
             if not dry_run:
-                upsert_item(ensure_db_path(), front_matter, normalized_file_url, file)
+                upsert_item(db_path, front_matter, normalized_file_url, file)
             ready_items += 1
         except Exception as e:
             warnings += 1
