@@ -49,6 +49,7 @@ def html_to_epub(title, html_content, output_filename):
 
 def create_epub_from_urls(urls, output_filename, path_to_db=None):
     added_items = 0
+    item_results: list[bool] = []
     if len(urls) > 0:
         date = datetime.datetime.now().strftime("%Y-%m-%d")
         book = epub.EpubBook()
@@ -69,9 +70,11 @@ def create_epub_from_urls(urls, output_filename, path_to_db=None):
                 chapters.append(chapter)
                 toc.append(epub.Link(f"chap_{idx + 1}.xhtml", title, f"chap{idx + 1}"))
                 added_items += 1
+                item_results.append(True)
                 logging.info(f"Added {url}.")
             except Exception as e:
                 logging.warning(f"Failed to process {url}: {e}")
+                item_results.append(False)
 
         book.toc = tuple(toc)
         book.add_item(epub.EpubNcx())
@@ -83,3 +86,4 @@ def create_epub_from_urls(urls, output_filename, path_to_db=None):
         logging.info(f"✔ Created epub in {str(output_filename)} with {added_items} items.")
     else:
         logging.info("No epub created; there are no items to add.")
+    return item_results

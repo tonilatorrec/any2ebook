@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 APP_NAME = "any2ebook"
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 
 
 def user_data_dir(app: str = APP_NAME) -> Path:
@@ -38,20 +38,21 @@ def _create_items_table(conn: sqlite3.Connection) -> None:
         """
     )
 
-def _create_aux_tables(conn: sqlite3.Connection) -> None:
+def _create_runs_table_v3(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS runs(
             id INTEGER PRIMARY KEY,
             run_at TEXT NOT NULL,
-            total_found INTEGER,
-            total_new INTEGER,
-            total_converted INTEGER,
-            total_failed INTEGER
+            artifact_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            recipe TEXT NOT NULL
         )
         """
     )
 
+
+def _create_run_items_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS run_items(
@@ -67,15 +68,35 @@ def _create_aux_tables(conn: sqlite3.Connection) -> None:
 
 def _create_schema_v2(conn: sqlite3.Connection) -> None:
     _create_items_table(conn)
-    _create_aux_tables(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS runs(
+            id INTEGER PRIMARY KEY,
+            run_at TEXT NOT NULL,
+            total_found INTEGER,
+            total_new INTEGER,
+            total_converted INTEGER,
+            total_failed INTEGER
+        )
+        """
+    )
+    _create_run_items_table(conn)
+
+
+def _create_schema_v3(conn: sqlite3.Connection) -> None:
+    _create_items_table(conn)
+    _create_runs_table_v3(conn)
+    _create_run_items_table(conn)
 
 
 def _has_items_table(conn: sqlite3.Connection) -> bool:
+    """Check that the items table exists in the database."""
     cur = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='items'")
     return cur.fetchone() is not None
 
 
 def _has_any_user_table(conn: sqlite3.Connection) -> bool:
+    """Check if the database contains user-created tables."""
     cur = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
     )
@@ -83,11 +104,20 @@ def _has_any_user_table(conn: sqlite3.Connection) -> bool:
 
 
 def _items_columns(conn: sqlite3.Connection) -> list[str]:
+    """Get the column names for the items table"""
     rows = conn.execute("PRAGMA table_info(items)").fetchall()
     return [row[1] for row in rows]
 
 
+def _runs_columns(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute("PRAGMA table_info(runs)").fetchall()
+    return [row[1] for row in rows]
+
+
 def _is_v1_items_schema(conn: sqlite3.Connection) -> bool:
+    """Check that the schema for the items table is compatible with schema version 1.
+    It only has to check for the fields needed to migrate to later versions!
+    """
     cols = set(_items_columns(conn))
     return {
         "url",
@@ -99,11 +129,24 @@ def _is_v1_items_schema(conn: sqlite3.Connection) -> bool:
 
 
 def _is_v2_items_schema(conn: sqlite3.Connection) -> bool:
+    """Check that the schema for the items table is compatible with schema version 2.
+    """
     cols = set(_items_columns(conn))
     return {"captured_at", "payload_ref", "payload_type", "source"}.issubset(cols)
 
 
+def _is_v2_runs_schema(conn: sqlite3.Connection) -> bool:
+    cols = set(_runs_columns(conn))
+    return {"run_at", "total_found", "total_new", "total_converted", "total_failed"}.issubset(cols)
+
+
+def _is_v3_runs_schema(conn: sqlite3.Connection) -> bool:
+    cols = set(_runs_columns(conn))
+    return {"run_at", "artifact_type", "filename", "recipe"}.issubset(cols)
+
+
 def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Migrates schema version 1 to version 2."""
     now = datetime.now(timezone.utc).isoformat()
     conn.executescript(
         f"""
@@ -132,18 +175,57 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
         PRAGMA foreign_keys=ON;
         """
     )
-    _create_aux_tables(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS runs(
+            id INTEGER PRIMARY KEY,
+            run_at TEXT NOT NULL,
+            total_found INTEGER,
+            total_new INTEGER,
+            total_converted INTEGER,
+            total_failed INTEGER
+        )
+        """
+    )
+    _create_run_items_table(conn)
+
+
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        DROP TABLE IF EXISTS runs_v2_backup;
+        ALTER TABLE runs RENAME TO runs_v2_backup;
+        CREATE TABLE runs(
+            id INTEGER PRIMARY KEY,
+            run_at TEXT NOT NULL,
+            artifact_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            recipe TEXT NOT NULL
+        );
+        INSERT INTO runs(id, run_at, artifact_type, filename, recipe)
+        SELECT id, run_at, 'epub', '', ''
+        FROM runs_v2_backup;
+        DROP TABLE runs_v2_backup;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+    _create_run_items_table(conn)
 
 
 def migrate_db(db_path: Path | None = None) -> Path:
     db = ensure_db_path() if db_path is None else Path(db_path)
     conn = sqlite3.connect(db)
     try:
+        # get/set schema version, if version is not latest then migrate
         version = int(conn.execute("PRAGMA user_version").fetchone()[0])
 
-        if version == 0:
+        if version == 0: 
+            # version is not defined, try to infer it from the field names 
             if not _has_any_user_table(conn):
-                _create_schema_v2(conn)
+                _create_schema_v3(conn)
                 conn.execute(f"PRAGMA user_version = {LATEST_SCHEMA_VERSION}")
                 conn.commit()
                 return db
@@ -151,28 +233,44 @@ def migrate_db(db_path: Path | None = None) -> Path:
             if _has_items_table(conn) and _is_v1_items_schema(conn):
                 version = 1
             elif _has_items_table(conn) and _is_v2_items_schema(conn):
-                version = 2
+                if _is_v3_runs_schema(conn):
+                    version = 3
+                else:
+                    version = 2
             else:
-                _create_schema_v2(conn)
+                _create_schema_v3(conn)
                 conn.execute(f"PRAGMA user_version = {LATEST_SCHEMA_VERSION}")
                 conn.commit()
                 return db
 
-        if version == 1:
-            _migrate_v1_to_v2(conn)
-            conn.execute("PRAGMA user_version = 2")
-            conn.commit()
-            return db
+        while version < LATEST_SCHEMA_VERSION:
+            if version == 1:
+                _migrate_v1_to_v2(conn)
+                version = 2
+                conn.execute("PRAGMA user_version = 2")
+                conn.commit()
+                continue
 
-        if version == 2:
-            _create_aux_tables(conn)
-            conn.execute("PRAGMA user_version = 2")
-            conn.commit()
-            return db
+            if version == 2:
+                if _is_v2_runs_schema(conn):
+                    _migrate_v2_to_v3(conn)
+                else:
+                    _create_runs_table_v3(conn)
+                    _create_run_items_table(conn)
+                version = 3
+                conn.execute("PRAGMA user_version = 3")
+                conn.commit()
+                continue
 
-        raise RuntimeError(
-            f"Unsupported database schema version {version}. Latest supported is {LATEST_SCHEMA_VERSION}."
-        )
+            raise RuntimeError(
+                f"Unsupported database schema version {version}. Latest supported is {LATEST_SCHEMA_VERSION}."
+            )
+
+        _create_runs_table_v3(conn)
+        _create_run_items_table(conn)
+        conn.execute(f"PRAGMA user_version = {LATEST_SCHEMA_VERSION}")
+        conn.commit()
+        return db
     finally:
         conn.close()
 

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def get_urls_to_convert(path_to_db: str) -> tuple[list[int], list[str]]:
-    """Pick URL payloads that were not yet converted in previous runs."""
+    """Pick URL payloads that have never been converted and never failed before."""
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
     cur = conn.cursor()
     with conn:
@@ -23,7 +23,7 @@ def get_urls_to_convert(path_to_db: str) -> tuple[list[int], list[str]]:
               AND NOT EXISTS (
                   SELECT 1
                   FROM run_items ri
-                  WHERE ri.item_id = i.id AND ri.action = 'converted'
+                  WHERE ri.item_id = i.id AND ri.action IN ('converted', 'failed')
               )
             """
         )
@@ -61,7 +61,9 @@ def stage_and_convert(
     else:
         output_path = os.path.join(output_dir, datetime_str + ".epub")
 
-    create_epub_from_urls(url_list, output_path)
+    item_results = create_epub_from_urls(url_list, output_path)
+    if len(item_results) != len(id_list):
+        raise RuntimeError("Mismatch between conversion results and selected items.")
 
     # Persist conversion markers through run/run_items.
     conn = sqlite3.connect(path_to_db)  # will create db if it does not exist
@@ -69,15 +71,23 @@ def stage_and_convert(
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO runs(run_at, total_found, total_new, total_converted, total_failed)
-            VALUES (?, ?, NULL, ?, NULL)
+            INSERT INTO runs(run_at, artifact_type, filename, recipe)
+            VALUES (?, ?, ?, ?)
             """,
-            (datetime.datetime.now().isoformat(), len(id_list), len(id_list)),
+            (datetime.datetime.now().isoformat(), "epub", output_path, ""),
         )
         run_id = int(cur.lastrowid)
+        converted = []
+        failed = []
+        for item_id, is_ok in zip(id_list, item_results):
+            if is_ok:
+                converted.append((run_id, item_id, "converted"))
+            else:
+                failed.append((run_id, item_id, "failed"))
+
         cur.executemany(
-            "INSERT INTO run_items(run_id, item_id, action) VALUES (?, ?, 'converted')",
-            [(run_id, item_id) for item_id in id_list],
+            "INSERT INTO run_items(run_id, item_id, action) VALUES (?, ?, ?)",
+            converted + failed,
         )
 
 def run(config: Config):
