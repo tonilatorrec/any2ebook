@@ -142,3 +142,71 @@ def test_migrate_db_upgrades_legacy_runs_totals_schema(tmp_path: Path):
             "SELECT artifact_type, filename, recipe, status FROM runs WHERE id = 1"
         ).fetchone()
     assert row == ("epub", "", "", "committed")
+
+
+def test_migrate_db_repairs_run_items_fk_to_items_table(tmp_path: Path):
+    db_path = tmp_path / "any2ebook.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE items(
+                id INTEGER PRIMARY KEY,
+                captured_at TEXT NOT NULL,
+                payload_ref TEXT NOT NULL UNIQUE,
+                payload_type TEXT NOT NULL,
+                source TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE runs(
+                id INTEGER PRIMARY KEY,
+                run_at TEXT NOT NULL,
+                artifact_type TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                recipe TEXT NOT NULL,
+                status TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE run_items(
+                run_id INTEGER,
+                item_id INTEGER,
+                action TEXT,
+                FOREIGN KEY(run_id) REFERENCES runs(id),
+                FOREIGN KEY(item_id) REFERENCES items_v1_backup(id)
+            )
+            """
+        )
+        conn.commit()
+
+    migrate_db(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        fk_rows = conn.execute("PRAGMA foreign_key_list(run_items)").fetchall()
+        targets = {row[3]: row[2] for row in fk_rows}
+        assert targets.get("run_id") == "runs"
+        assert targets.get("item_id") == "items"
+
+        conn.execute(
+            """
+            INSERT INTO items(captured_at, payload_ref, payload_type, source)
+            VALUES('2026-01-01T00:00:00+00:00', 'https://example.com/a', 'url', 'raw_text')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO runs(run_at, artifact_type, filename, recipe, status)
+            VALUES('2026-01-01T00:00:00+00:00', 'epub', 'out.epub', '', 'committed')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO run_items(run_id, item_id, action)
+            VALUES(1, 1, 'converted')
+            """
+        )
+        conn.commit()

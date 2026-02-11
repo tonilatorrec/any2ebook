@@ -105,6 +105,37 @@ def _upgrade_runs_table_if_needed(conn: sqlite3.Connection) -> None:
         )
 
 
+def _run_items_fk_targets(conn: sqlite3.Connection) -> dict[str, str]:
+    rows = conn.execute("PRAGMA foreign_key_list(run_items)").fetchall()
+    return {row[3]: row[2] for row in rows}
+
+
+def _repair_run_items_table_if_needed(conn: sqlite3.Connection) -> None:
+    targets = _run_items_fk_targets(conn)
+    if targets.get("run_id") == "runs" and targets.get("item_id") == "items":
+        return
+
+    conn.executescript(
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        CREATE TABLE run_items_new(
+            run_id INTEGER,
+            item_id INTEGER,
+            action TEXT,
+            FOREIGN KEY(run_id) REFERENCES runs(id),
+            FOREIGN KEY(item_id) REFERENCES items(id)
+        );
+        INSERT INTO run_items_new(run_id, item_id, action)
+        SELECT run_id, item_id, action FROM run_items;
+        DROP TABLE run_items;
+        ALTER TABLE run_items_new RENAME TO run_items;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+
+
 def migrate_db(db_path: Path | None = None) -> Path:
     db = ensure_db_path() if db_path is None else Path(db_path)
     conn = sqlite3.connect(db)
@@ -116,6 +147,7 @@ def migrate_db(db_path: Path | None = None) -> Path:
         _create_runs_table_v3(conn)
         _create_run_items_table(conn)
         _upgrade_runs_table_if_needed(conn)
+        _repair_run_items_table_if_needed(conn)
         _assert_current_schema(conn)
         conn.commit()
         return db
