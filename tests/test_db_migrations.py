@@ -107,3 +107,38 @@ def test_migrate_db_upgrades_runs_table_missing_status(tmp_path: Path):
     with sqlite3.connect(db_path) as conn:
         row = conn.execute("SELECT status FROM runs WHERE id = 1").fetchone()
     assert row == ("committed",)
+
+
+def test_migrate_db_upgrades_legacy_runs_totals_schema(tmp_path: Path):
+    db_path = tmp_path / "any2ebook.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE runs(
+                id INTEGER PRIMARY KEY,
+                run_at TEXT NOT NULL,
+                status TEXT NOT NULL,
+                total INTEGER,
+                total_found INTEGER,
+                total_new INTEGER,
+                total_failed INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO runs(run_at, status, total, total_found, total_new, total_failed)
+            VALUES('2026-01-01T00:00:00+00:00', 'committed', 10, 10, 7, 3)
+            """
+        )
+        conn.commit()
+
+    migrate_db(db_path)
+
+    cols = set(_runs_columns(db_path))
+    assert {"artifact_type", "filename", "recipe", "status"}.issubset(cols)
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT artifact_type, filename, recipe, status FROM runs WHERE id = 1"
+        ).fetchone()
+    assert row == ("epub", "", "", "committed")
