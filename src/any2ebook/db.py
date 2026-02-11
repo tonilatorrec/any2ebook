@@ -44,7 +44,8 @@ def _create_runs_table_v3(conn: sqlite3.Connection) -> None:
             run_at TEXT NOT NULL,
             artifact_type TEXT NOT NULL,
             filename TEXT NOT NULL,
-            recipe TEXT NOT NULL
+            recipe TEXT NOT NULL,
+            status TEXT NOT NULL
         )
         """
     )
@@ -64,13 +65,46 @@ def _create_run_items_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {row[1] for row in rows}
+
+
+def _assert_current_schema(conn: sqlite3.Connection) -> None:
+    expected = {
+        "items": {"id", "captured_at", "payload_ref", "payload_type", "source"},
+        "runs": {"id", "run_at", "artifact_type", "filename", "recipe", "status"},
+        "run_items": {"run_id", "item_id", "action"},
+    }
+    for table, cols in expected.items():
+        table_cols = _table_columns(conn, table)
+        if not cols.issubset(table_cols):
+            raise RuntimeError(
+                f"Unsupported database schema in table '{table}'. "
+                f"Expected columns: {sorted(cols)}. Found: {sorted(table_cols)}."
+            )
+
+
+def _upgrade_runs_table_if_needed(conn: sqlite3.Connection) -> None:
+    runs_cols = _table_columns(conn, "runs")
+    if "status" not in runs_cols:
+        conn.execute(
+            "ALTER TABLE runs ADD COLUMN status TEXT NOT NULL DEFAULT 'committed'"
+        )
+
+
 def migrate_db(db_path: Path | None = None) -> Path:
     db = ensure_db_path() if db_path is None else Path(db_path)
     conn = sqlite3.connect(db)
     try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         _create_items_table(conn)
         _create_runs_table_v3(conn)
         _create_run_items_table(conn)
+        _upgrade_runs_table_if_needed(conn)
+        _assert_current_schema(conn)
         conn.commit()
         return db
     finally:
