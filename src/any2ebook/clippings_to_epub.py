@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import sqlite3
+import sys
 from pathlib import Path
 
 from .config import Config, ensure_config_path
@@ -22,10 +23,19 @@ def _fsync_file(path: str) -> None:
 
 
 def _fsync_dir(path: str) -> None:
+    # Directory fsync is not reliably supported on Windows Python file descriptors.
+    if os.name == "nt":
+        return
     dir_path = str(Path(path).parent)
-    dir_fd = os.open(dir_path, os.O_RDONLY)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    dir_fd = os.open(dir_path, flags)
     try:
         os.fsync(dir_fd)
+    except OSError:
+        # Some filesystems/OS combinations don't allow fsync on directory fds.
+        logger.debug("Skipping directory fsync for %s on %s", dir_path, sys.platform, exc_info=True)
     finally:
         os.close(dir_fd)
 
