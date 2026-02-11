@@ -2,7 +2,6 @@ import datetime
 import logging
 import os
 import sqlite3
-import sys
 from pathlib import Path
 
 from .config import Config, ensure_config_path
@@ -15,35 +14,6 @@ logging.basicConfig(level=logging.INFO)
 
 def _ensure_parent_dir(path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-
-
-def _fsync_file(path: str) -> None:
-    with open(path, "rb") as f:
-        os.fsync(f.fileno())
-
-
-def _fsync_dir(path: str) -> None:
-    # Directory fsync is not reliably supported on Windows Python file descriptors.
-    if os.name == "nt":
-        return
-    dir_path = str(Path(path).parent)
-    flags = os.O_RDONLY
-    if hasattr(os, "O_DIRECTORY"):
-        flags |= os.O_DIRECTORY
-    dir_fd = os.open(dir_path, flags)
-    try:
-        os.fsync(dir_fd)
-    except OSError:
-        # Some filesystems/OS combinations don't allow fsync on directory fds.
-        logger.debug("Skipping directory fsync for %s on %s", dir_path, sys.platform, exc_info=True)
-    finally:
-        os.close(dir_fd)
-
-
-def _atomic_finalize_file(tmp_path: str, final_path: str) -> None:
-    _fsync_file(tmp_path)
-    os.replace(tmp_path, final_path)
-    _fsync_dir(final_path)
 
 
 def _cleanup_file(path: str) -> None:
@@ -105,8 +75,8 @@ def stage_and_convert(
     else:
         output_path = os.path.join(output_dir, datetime_str + ".epub")
 
-    tmp_output_path = output_path + ".tmp"
-    _cleanup_file(tmp_output_path)
+    _ensure_parent_dir(output_path)
+    _cleanup_file(output_path)
 
     conn = sqlite3.connect(path_to_db)
     try:
@@ -123,19 +93,17 @@ def stage_and_convert(
         )
         run_id = int(cur.lastrowid)
         try:
-            item_results = create_epub_from_urls(url_list, tmp_output_path)
+            item_results = create_epub_from_urls(url_list, output_path)
             if len(item_results) != len(id_list):
                 raise RuntimeError("Mismatch between conversion results and selected items.")
 
             has_converted = any(item_results)
             if has_converted:
-                if not os.path.exists(tmp_output_path):
+                if not os.path.exists(output_path):
                     raise RuntimeError("EPUB conversion reported success but artifact file is missing.")
-                _ensure_parent_dir(output_path)
-                _atomic_finalize_file(tmp_output_path, output_path)
                 final_filename = output_path
             else:
-                _cleanup_file(tmp_output_path)
+                _cleanup_file(output_path)
                 final_filename = ""
 
             converted = []
@@ -157,11 +125,11 @@ def stage_and_convert(
             conn.commit()
         except KeyboardInterrupt:
             conn.rollback()
-            _cleanup_file(tmp_output_path)
+            _cleanup_file(output_path)
             raise
         except Exception:
             conn.rollback()
-            _cleanup_file(tmp_output_path)
+            _cleanup_file(output_path)
             raise
     finally:
         conn.close()
