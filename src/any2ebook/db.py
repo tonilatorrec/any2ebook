@@ -22,7 +22,7 @@ def user_data_dir(app: str = APP_NAME) -> Path:
 def ensure_db_path(base_dir: Path | None = None) -> Path:
     d = base_dir or user_data_dir()
     d.mkdir(parents=True, exist_ok=True)
-    return d / "obsidian.db"
+    return d / "any2ebook.db"
 
 
 def _create_items_table(conn: sqlite3.Connection) -> None:

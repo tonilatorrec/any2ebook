@@ -17,7 +17,7 @@ def _runs_columns(db_path: Path) -> list[str]:
 
 
 def test_migrate_creates_latest_schema_for_new_db(tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     migrate_db(db_path)
 
     with sqlite3.connect(db_path) as conn:
@@ -41,7 +41,7 @@ def test_migrate_creates_latest_schema_for_new_db(tmp_path: Path):
 
 
 def test_migrate_v1_to_v2_maps_old_fields_into_new_items_schema(tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             """
@@ -91,7 +91,7 @@ def test_migrate_v1_to_v2_maps_old_fields_into_new_items_schema(tmp_path: Path):
 
 
 def test_migrate_legacy_unversioned_schema(tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             """
@@ -138,7 +138,7 @@ def test_migrate_legacy_unversioned_schema(tmp_path: Path):
 
 
 def test_migrate_v2_to_v3_runs_schema(tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             """

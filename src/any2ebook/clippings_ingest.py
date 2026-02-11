@@ -13,6 +13,17 @@ from .db import ensure_db_path, migrate_db
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+
+def read_links_file(path: str | os.PathLike | Path) -> list[str]:
+    """Read a text file containing one URL per line."""
+    links: list[str] = []
+    with open(path, "r", encoding="utf8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if line:
+                links.append(line)
+    return links
+
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
     """
     Return a list of Markdown files inside the vault's Clippings directory.
@@ -88,6 +99,11 @@ def normalize_url(url: str) -> str:
     return urlunparse((scheme, netloc, path, "", clean_query, ""))
 
 
+def is_valid_http_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme.lower() in {"http", "https"} and bool(parsed.netloc)
+
+
 def upsert_item(
     db_path: Path, item_front_matter: dict, payload_ref: str, md_file_path: str | None
 ) -> int:
@@ -124,47 +140,59 @@ def upsert_item(
         return int(row[0])
 
 
-def run(config: Config, dry_run: bool = False) -> dict:
-    # TODO: should these checks run here or when setting up config?
-    _clippings_path = config.clippings_path
-    if _clippings_path is None:
-        print("Obsidian clippings path not yet set. ", end="")
-        while True:
-            _clippings_path= input("""Please set path:\n> """)
-            if os.path.exists(_clippings_path):
-                break
-        config.clippings_path = _clippings_path
-    elif not os.path.exists(_clippings_path):
-        print("Obsidian clippings path does not exist. ", end="")
-        while not os.path.exists(_clippings_path):
-            _clippings_path = input("""Please set valid path:\n> """)
-        config.clippings_path = _clippings_path
-    else:
-        pass
-
-    config.save()
-
+def run(config: Config, dry_run: bool = False, links_file: Path | None = None) -> dict:
     db_path = migrate_db(ensure_db_path())
-    files = find_clipping_files(config.clippings_path)
     ready_items = 0
     warnings = 0
-    for file in files:
-        try:
-            front_matter = read_front_matter(file)
-            if not front_matter or "source" not in front_matter or not front_matter["source"]:
+
+    if links_file is not None:
+        links = read_links_file(links_file)
+        for link in links:
+            if not is_valid_http_url(link):
                 warnings += 1
-                logger.warning("Missing source front matter in %s", file)
+                logger.warning("Skipping invalid URL in %s: %s", links_file, link)
                 continue
-            file_url = front_matter["source"]
-            normalized_file_url = normalize_url(file_url)
+            normalized_link = normalize_url(link)
             if not dry_run:
-                upsert_item(db_path, front_matter, normalized_file_url, file)
+                upsert_item(db_path, {}, normalized_link, str(links_file))
             ready_items += 1
-        except Exception as e:
-            warnings += 1
-            logger.warning("Failed to parse front matter in %s: %s", file, e)
-            continue
-    return {"ready_items": ready_items, "warnings": warnings}
+        return {"ready_items": ready_items, "warnings": warnings}
+
+    # TODO: should these checks run here or when setting up config?
+    else:
+        _clippings_path = config.clippings_path
+        if _clippings_path is None:
+            print("Clippings path not yet set. ", end="")
+            while True:
+                _clippings_path = input("""Please set path:\n> """)
+                if os.path.exists(_clippings_path):
+                    break
+            config.clippings_path = _clippings_path
+        elif not os.path.exists(_clippings_path):
+            print("Clippings path does not exist. ", end="")
+            while not os.path.exists(_clippings_path):
+                _clippings_path = input("""Please set valid path:\n> """)
+            config.clippings_path = _clippings_path
+
+        config.save()
+        files = find_clipping_files(config.clippings_path)
+        for file in files:
+            try:
+                front_matter = read_front_matter(file)
+                if not front_matter or "source" not in front_matter or not front_matter["source"]:
+                    warnings += 1
+                    logger.warning("Missing source front matter in %s", file)
+                    continue
+                file_url = front_matter["source"]
+                normalized_file_url = normalize_url(file_url)
+                if not dry_run:
+                    upsert_item(db_path, front_matter, normalized_file_url, file)
+                ready_items += 1
+            except Exception as e:
+                warnings += 1
+                logger.warning("Failed to parse front matter in %s: %s", file, e)
+                continue
+        return {"ready_items": ready_items, "warnings": warnings}
 
 def main():
     config = Config.load(ensure_config_path())

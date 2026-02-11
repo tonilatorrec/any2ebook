@@ -22,7 +22,7 @@ def _seed_items(db_path: Path) -> None:
 
 
 def test_get_urls_to_convert_excludes_converted_and_failed(tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     migrate_db(db_path)
     _seed_items(db_path)
 
@@ -46,7 +46,7 @@ def test_get_urls_to_convert_excludes_converted_and_failed(tmp_path: Path):
 
 
 def test_stage_and_convert_records_failed_and_converted(monkeypatch, tmp_path: Path):
-    db_path = tmp_path / "obsidian.db"
+    db_path = tmp_path / "any2ebook.db"
     output_dir = tmp_path / "out"
     staging_dir = tmp_path / "staging"
     output_dir.mkdir()
