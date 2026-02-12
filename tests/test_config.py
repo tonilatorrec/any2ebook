@@ -19,5 +19,6 @@ def test_invalid_config_path(tmp_path):
         Config.load(invalid_path)
 
 def test_config_file_with_missing_key():
-    config = Config.load(Path('tests/config_sample_test.yaml'))
+    fixture_path = Path(__file__).with_name("config_sample_test.yaml")
+    config = Config.load(fixture_path)
     assert config.input_path is None

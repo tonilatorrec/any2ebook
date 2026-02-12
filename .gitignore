@@ -193,3 +193,4 @@ any2ebook/config.yaml
 run_gui.py
 .test_run
 *.ps1
+tests/TESTS_EXPLAINED.md

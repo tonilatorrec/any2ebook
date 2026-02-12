@@ -13,6 +13,14 @@
   </head>
   <body>
     <button id="save">Save current tab</button>
+    <label style="display:block; margin:8px 0 4px;">
+      <input id="autoExportEnabled" type="checkbox" />
+      Auto-export on save
+    </label>
+    <label style="display:block; margin:0 0 8px;">
+      <div style="margin-bottom:4px;">Downloads subfolder</div>
+      <input id="autoExportSubdir" type="text" style="width:100%; box-sizing:border-box;" />
+    </label>
 
     <div class="row">
       <button id="export">Export JSON</button>

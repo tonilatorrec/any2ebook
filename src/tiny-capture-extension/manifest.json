@@ -3,7 +3,7 @@
   "name": "Tiny Capture",
   "version": "0.1.0",
   "description": "Save current tab URL to extension storage (AKU-style capture queue).",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "downloads"],
   "browser_action": {
     "default_title": "Save link",
     "default_popup": "popup.html"

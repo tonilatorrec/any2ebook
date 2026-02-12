@@ -41,7 +41,13 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
 
     report = run(config, links_file=links_file)
     # 2 valid URLs, 1 invalid line.
-    assert report == {"ready_items": 2, "warnings": 1}
+    assert report == {
+        "ready_items": 2,
+        "warnings": 1,
+        "files_seen": 1,
+        "files_processed": 1,
+        "files_skipped_unchanged": 0,
+    }
 
     with sqlite3.connect(db_path) as conn:
         rows = conn.execute(
@@ -96,7 +102,13 @@ def test_run_ingests_capture_queue_json_file(monkeypatch, tmp_path: Path):
     )
 
     report = run(config, links_file=queue_file)
-    assert report == {"ready_items": 2, "warnings": 0}
+    assert report == {
+        "ready_items": 2,
+        "warnings": 0,
+        "files_seen": 1,
+        "files_processed": 1,
+        "files_skipped_unchanged": 0,
+    }
 
     with sqlite3.connect(db_path) as conn:
         rows = conn.execute(
@@ -107,3 +119,79 @@ def test_run_ingests_capture_queue_json_file(monkeypatch, tmp_path: Path):
         ("https://example.com/a", "browser_extension"),
         ("https://example.com/b", "browser_extension"),
     ]
+
+
+def test_run_ingests_mixed_input_dir(monkeypatch, tmp_path: Path):
+    db_path = tmp_path / "any2ebook.db"
+    input_dir = tmp_path / "inbox"
+    input_dir.mkdir()
+
+    (input_dir / "capture.json").write_text(
+        """
+        [
+          {
+            "captured_at": "2026-02-12T15:23:11.465Z",
+            "source": "browser_extension",
+            "payload_type": "url",
+            "payload_ref": "https://example.com/json"
+          }
+        ]
+        """.strip(),
+        encoding="utf8",
+    )
+    (input_dir / "clip.md").write_text(
+        "---\nsource: \"https://example.com/md?utm_source=newsletter\"\n---\n# Title\n",
+        encoding="utf8",
+    )
+
+    monkeypatch.setattr("any2ebook.clippings_ingest.ensure_db_path", lambda: db_path)
+    config = Config(config_path=tmp_path / "config.yaml", clippings_path=None, output_path=tmp_path)
+
+    report = run(config, input_dir=input_dir)
+    assert report == {
+        "ready_items": 2,
+        "warnings": 0,
+        "files_seen": 2,
+        "files_processed": 2,
+        "files_skipped_unchanged": 0,
+    }
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT payload_ref, source FROM items ORDER BY payload_ref"
+        ).fetchall()
+
+    assert rows == [
+        ("https://example.com/json", "browser_extension"),
+        ("https://example.com/md", str(input_dir / "clip.md")),
+    ]
+
+
+def test_run_input_dir_skips_unchanged_files(monkeypatch, tmp_path: Path):
+    db_path = tmp_path / "any2ebook.db"
+    input_dir = tmp_path / "inbox"
+    input_dir.mkdir()
+    queue_file = input_dir / "capture.json"
+    queue_file.write_text(
+        """
+        [
+          {
+            "source": "browser_extension",
+            "payload_type": "url",
+            "payload_ref": "https://example.com/once"
+          }
+        ]
+        """.strip(),
+        encoding="utf8",
+    )
+
+    monkeypatch.setattr("any2ebook.clippings_ingest.ensure_db_path", lambda: db_path)
+    config = Config(config_path=tmp_path / "config.yaml", clippings_path=None, output_path=tmp_path)
+
+    first = run(config, input_dir=input_dir)
+    second = run(config, input_dir=input_dir)
+
+    assert first["files_processed"] == 1
+    assert first["files_skipped_unchanged"] == 0
+    assert second["files_processed"] == 0
+    assert second["files_skipped_unchanged"] == 1

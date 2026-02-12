@@ -65,6 +65,20 @@ def _create_run_items_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _create_ingest_files_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ingest_files(
+            path TEXT PRIMARY KEY,
+            size INTEGER NOT NULL,
+            mtime_ns INTEGER NOT NULL,
+            last_ingested_at TEXT NOT NULL,
+            status TEXT NOT NULL
+        )
+        """
+    )
+
+
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return {row[1] for row in rows}
@@ -75,6 +89,7 @@ def _assert_current_schema(conn: sqlite3.Connection) -> None:
         "items": {"id", "captured_at", "payload_ref", "payload_type", "source"},
         "runs": {"id", "run_at", "artifact_type", "filename", "recipe", "status"},
         "run_items": {"run_id", "item_id", "action"},
+        "ingest_files": {"path", "size", "mtime_ns", "last_ingested_at", "status"},
     }
     for table, cols in expected.items():
         table_cols = _table_columns(conn, table)
@@ -146,6 +161,7 @@ def migrate_db(db_path: Path | None = None) -> Path:
         _create_items_table(conn)
         _create_runs_table_v3(conn)
         _create_run_items_table(conn)
+        _create_ingest_files_table(conn)
         _upgrade_runs_table_if_needed(conn)
         _repair_run_items_table_if_needed(conn)
         _assert_current_schema(conn)

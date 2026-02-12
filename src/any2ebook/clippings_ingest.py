@@ -24,30 +24,51 @@ def _read_links_lines(raw_text: str) -> list[dict[str, str]]:
     return links
 
 
+def _json_item_to_link_entry(item: object) -> dict[str, str] | None:
+    # Support plain JSON URL arrays: ["https://...", "https://..."].
+    if isinstance(item, str):
+        return {"payload_ref": item}
+
+    if not isinstance(item, dict):
+        return None
+
+    payload_ref = item.get("payload_ref")
+    if not isinstance(payload_ref, str):
+        return None
+
+    payload_type = item.get("payload_type")
+    if payload_type is not None and payload_type != "url":
+        return None
+
+    entry: dict[str, str] = {"payload_ref": payload_ref}
+    captured_at = item.get("captured_at")
+    source = item.get("source")
+    if isinstance(captured_at, str):
+        entry["captured_at"] = captured_at
+    if isinstance(source, str):
+        entry["source"] = source
+    return entry
+
+
 def _read_queue_json(raw_text: str) -> list[dict[str, str]]:
     payload = json.loads(raw_text)
     if isinstance(payload, dict):
-        payload = payload.get("queue")
+        if isinstance(payload.get("queue"), list):
+            payload = payload["queue"]
+        else:
+            # Also support a single capture entry object.
+            payload = [payload]
     if not isinstance(payload, list):
-        raise ValueError("JSON input must be an array or an object with a 'queue' array")
+        raise ValueError(
+            "JSON input must be a URL array, a capture-item array, "
+            "or an object containing either a capture item or 'queue' array"
+        )
 
     links: list[dict[str, str]] = []
     for item in payload:
-        if not isinstance(item, dict):
-            continue
-        if item.get("payload_type") != "url":
-            continue
-        payload_ref = item.get("payload_ref")
-        if not isinstance(payload_ref, str):
-            continue
-        entry: dict[str, str] = {"payload_ref": payload_ref}
-        captured_at = item.get("captured_at")
-        source = item.get("source")
-        if isinstance(captured_at, str):
-            entry["captured_at"] = captured_at
-        if isinstance(source, str):
-            entry["source"] = source
-        links.append(entry)
+        entry = _json_item_to_link_entry(item)
+        if entry is not None:
+            links.append(entry)
     return links
 
 
@@ -55,7 +76,7 @@ def read_links_file(path: str | os.PathLike | Path) -> list[dict[str, str]]:
     """
     Read ingest input from either:
     - text with one URL per line, or
-    - capture queue JSON exported by the browser extension.
+    - JSON URL lists, capture queue JSON, or a single capture item JSON.
     """
     with open(path, "r", encoding="utf8") as f:
         raw_text = f.read()
@@ -83,6 +104,15 @@ def find_clipping_files(path: str | os.PathLike) -> list[Path]:
         if file_path.is_file() and file_path.suffix == ".md":
             files.append(file_path)
     return files
+
+
+def find_ingest_files(path: str | os.PathLike) -> list[Path]:
+    files: list[Path] = []
+    main_path = Path(path)
+    for file_path in main_path.rglob("*"):
+        if file_path.is_file() and file_path.suffix.lower() in {".md", ".json"}:
+            files.append(file_path)
+    return sorted(files, key=lambda p: str(p))
 
 
 def read_front_matter(file_path: str | os.PathLike | Path) -> dict:
@@ -184,29 +214,147 @@ def upsert_item(
         return int(row[0])
 
 
-def run(config: Config, dry_run: bool = False, links_file: Path | None = None) -> dict:
+def _file_fingerprint(path: Path) -> tuple[int, int]:
+    stat = path.stat()
+    return (int(stat.st_size), int(stat.st_mtime_ns))
+
+
+def _is_unchanged_successfully_ingested(db_path: Path, file_path: Path) -> bool:
+    size, mtime_ns = _file_fingerprint(file_path)
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT size, mtime_ns, status FROM ingest_files WHERE path = ?",
+            (str(file_path.resolve()),),
+        ).fetchone()
+    if row is None:
+        return False
+    return int(row[0]) == size and int(row[1]) == mtime_ns and row[2] == "ok"
+
+
+def _mark_ingest_file(db_path: Path, file_path: Path, status: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    size, mtime_ns = _file_fingerprint(file_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO ingest_files(path, size, mtime_ns, last_ingested_at, status)
+            VALUES (:path, :size, :mtime_ns, :last_ingested_at, :status)
+            ON CONFLICT(path) DO UPDATE SET
+                size = excluded.size,
+                mtime_ns = excluded.mtime_ns,
+                last_ingested_at = excluded.last_ingested_at,
+                status = excluded.status
+            """,
+            {
+                "path": str(file_path.resolve()),
+                "size": size,
+                "mtime_ns": mtime_ns,
+                "last_ingested_at": now,
+                "status": status,
+            },
+        )
+        conn.commit()
+
+
+def _ingest_links_entries(
+    db_path: Path, entries: list[dict[str, str]], source_file: Path | None, dry_run: bool
+) -> tuple[int, int]:
+    ready_items = 0
+    warnings = 0
+    for link_entry in entries:
+        link = link_entry["payload_ref"]
+        if not is_valid_http_url(link):
+            warnings += 1
+            logger.warning("Skipping invalid URL in %s: %s", source_file, link)
+            continue
+        normalized_link = normalize_url(link)
+        if not dry_run:
+            upsert_item(
+                db_path,
+                {"created": link_entry.get("captured_at")},
+                normalized_link,
+                link_entry.get("source") or (str(source_file) if source_file else None),
+            )
+        ready_items += 1
+    return ready_items, warnings
+
+
+def run(
+    config: Config,
+    dry_run: bool = False,
+    links_file: Path | None = None,
+    input_dir: Path | None = None,
+) -> dict:
+    if links_file is not None and input_dir is not None:
+        raise ValueError("Use either links_file or input_dir, not both")
+
     db_path = migrate_db(ensure_db_path())
     ready_items = 0
     warnings = 0
+    files_seen = 0
+    files_processed = 0
+    files_skipped_unchanged = 0
 
     if links_file is not None:
         links = read_links_file(links_file)
-        for link_entry in links:
-            link = link_entry["payload_ref"]
-            if not is_valid_http_url(link):
+        files_seen = 1
+        files_processed = 1
+        added, warns = _ingest_links_entries(db_path, links, links_file, dry_run)
+        ready_items += added
+        warnings += warns
+        return {
+            "ready_items": ready_items,
+            "warnings": warnings,
+            "files_seen": files_seen,
+            "files_processed": files_processed,
+            "files_skipped_unchanged": files_skipped_unchanged,
+        }
+
+    if input_dir is not None:
+        for file in find_ingest_files(input_dir):
+            files_seen += 1
+            try:
+                if not dry_run and _is_unchanged_successfully_ingested(db_path, file):
+                    files_skipped_unchanged += 1
+                    continue
+
+                files_processed += 1
+                file_status = "ok"
+                if file.suffix.lower() == ".md":
+                    front_matter = read_front_matter(file)
+                    if not front_matter or "source" not in front_matter or not front_matter["source"]:
+                        warnings += 1
+                        file_status = "warning"
+                        logger.warning("Missing source front matter in %s", file)
+                    else:
+                        file_url = front_matter["source"]
+                        normalized_file_url = normalize_url(file_url)
+                        if not dry_run:
+                            upsert_item(db_path, front_matter, normalized_file_url, file)
+                        ready_items += 1
+                elif file.suffix.lower() == ".json":
+                    links = read_links_file(file)
+                    added, warns = _ingest_links_entries(db_path, links, file, dry_run)
+                    ready_items += added
+                    warnings += warns
+                    if warns > 0:
+                        file_status = "warning"
+
+                if not dry_run:
+                    _mark_ingest_file(db_path, file, file_status)
+            except Exception as e:
                 warnings += 1
-                logger.warning("Skipping invalid URL in %s: %s", links_file, link)
+                logger.warning("Failed to ingest %s: %s", file, e)
+                if not dry_run:
+                    _mark_ingest_file(db_path, file, "error")
                 continue
-            normalized_link = normalize_url(link)
-            if not dry_run:
-                upsert_item(
-                    db_path,
-                    {"created": link_entry.get("captured_at")},
-                    normalized_link,
-                    link_entry.get("source") or str(links_file),
-                )
-            ready_items += 1
-        return {"ready_items": ready_items, "warnings": warnings}
+        return {
+            "ready_items": ready_items,
+            "warnings": warnings,
+            "files_seen": files_seen,
+            "files_processed": files_processed,
+            "files_skipped_unchanged": files_skipped_unchanged,
+        }
 
     # TODO: should these checks run here or when setting up config?
     else:
@@ -227,6 +375,8 @@ def run(config: Config, dry_run: bool = False, links_file: Path | None = None) -
         config.save()
         files = find_clipping_files(config.clippings_path)
         for file in files:
+            files_seen += 1
+            files_processed += 1
             try:
                 front_matter = read_front_matter(file)
                 if not front_matter or "source" not in front_matter or not front_matter["source"]:
@@ -242,7 +392,13 @@ def run(config: Config, dry_run: bool = False, links_file: Path | None = None) -
                 warnings += 1
                 logger.warning("Failed to parse front matter in %s: %s", file, e)
                 continue
-        return {"ready_items": ready_items, "warnings": warnings}
+        return {
+            "ready_items": ready_items,
+            "warnings": warnings,
+            "files_seen": files_seen,
+            "files_processed": files_processed,
+            "files_skipped_unchanged": files_skipped_unchanged,
+        }
 
 def main():
     config = Config.load(ensure_config_path())
