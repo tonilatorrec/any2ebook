@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 14px system-ui, sans-serif; margin: 12px; width: 260px; }
+      button { width: 100%; padding: 10px; margin: 6px 0; }
+      .row { display: flex; gap: 8px; }
+      .row button { width: 50%; }
+      .meta { color: #555; margin-top: 8px; }
+      code { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <button id="save">Save current tab</button>
+
+    <div class="row">
+      <button id="export">Export JSON</button>
+      <button id="clear">Clear</button>
+    </div>
+
+    <div class="meta">
+      <div>Items: <strong id="count">0</strong></div>
+      <div style="margin-top:6px;">Hotkey: <code>Alt+Shift+S</code></div>
+      <div id="status" style="margin-top:8px;"></div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

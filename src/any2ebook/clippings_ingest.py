@@ -1,6 +1,7 @@
 import logging
 import os
 import sqlite3
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -14,15 +15,58 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def read_links_file(path: str | os.PathLike | Path) -> list[str]:
-    """Read a text file containing one URL per line."""
-    links: list[str] = []
-    with open(path, "r", encoding="utf8") as f:
-        for raw_line in f:
-            line = raw_line.strip()
-            if line:
-                links.append(line)
+def _read_links_lines(raw_text: str) -> list[dict[str, str]]:
+    links: list[dict[str, str]] = []
+    for raw_line in raw_text.splitlines():
+        line = raw_line.strip()
+        if line:
+            links.append({"payload_ref": line})
     return links
+
+
+def _read_queue_json(raw_text: str) -> list[dict[str, str]]:
+    payload = json.loads(raw_text)
+    if isinstance(payload, dict):
+        payload = payload.get("queue")
+    if not isinstance(payload, list):
+        raise ValueError("JSON input must be an array or an object with a 'queue' array")
+
+    links: list[dict[str, str]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if item.get("payload_type") != "url":
+            continue
+        payload_ref = item.get("payload_ref")
+        if not isinstance(payload_ref, str):
+            continue
+        entry: dict[str, str] = {"payload_ref": payload_ref}
+        captured_at = item.get("captured_at")
+        source = item.get("source")
+        if isinstance(captured_at, str):
+            entry["captured_at"] = captured_at
+        if isinstance(source, str):
+            entry["source"] = source
+        links.append(entry)
+    return links
+
+
+def read_links_file(path: str | os.PathLike | Path) -> list[dict[str, str]]:
+    """
+    Read ingest input from either:
+    - text with one URL per line, or
+    - capture queue JSON exported by the browser extension.
+    """
+    with open(path, "r", encoding="utf8") as f:
+        raw_text = f.read()
+
+    stripped = raw_text.lstrip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        try:
+            return _read_queue_json(raw_text)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+    return _read_links_lines(raw_text)
 
 def find_clipping_files(path: str | os.PathLike) -> list[Path]:
     """
@@ -147,14 +191,20 @@ def run(config: Config, dry_run: bool = False, links_file: Path | None = None) -
 
     if links_file is not None:
         links = read_links_file(links_file)
-        for link in links:
+        for link_entry in links:
+            link = link_entry["payload_ref"]
             if not is_valid_http_url(link):
                 warnings += 1
                 logger.warning("Skipping invalid URL in %s: %s", links_file, link)
                 continue
             normalized_link = normalize_url(link)
             if not dry_run:
-                upsert_item(db_path, {}, normalized_link, str(links_file))
+                upsert_item(
+                    db_path,
+                    {"created": link_entry.get("captured_at")},
+                    normalized_link,
+                    link_entry.get("source") or str(links_file),
+                )
             ready_items += 1
         return {"ready_items": ready_items, "warnings": warnings}
 

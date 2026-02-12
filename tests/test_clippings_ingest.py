@@ -53,3 +53,57 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
         ("https://example.com/a", str(links_file)),
         ("https://example.com/b", str(links_file)),
     ]
+
+
+def test_run_ingests_capture_queue_json_file(monkeypatch, tmp_path: Path):
+    db_path = tmp_path / "any2ebook.db"
+    queue_file = tmp_path / "aku_capture_queue.json"
+    queue_file.write_text(
+        """
+        [
+          {
+            "captured_at": "2026-02-12T15:23:11.465Z",
+            "source": "browser_extension",
+            "payload_type": "url",
+            "payload_ref": "https://example.com/a?utm_source=newsletter"
+          },
+          {
+            "captured_at": "2026-02-12T15:23:12.465Z",
+            "source": "browser_extension",
+            "payload_type": "url",
+            "payload_ref": "https://example.com/b"
+          },
+          {
+            "payload_type": "note",
+            "payload_ref": "ignored"
+          }
+        ]
+        """.strip(),
+        encoding="utf8",
+    )
+
+    monkeypatch.setattr("any2ebook.clippings_ingest.ensure_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("input() should not be called")),
+    )
+
+    config = Config(config_path=tmp_path / "config.yaml", clippings_path=None, output_path=tmp_path)
+    monkeypatch.setattr(
+        Config,
+        "save",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("save() should not be called")),
+    )
+
+    report = run(config, links_file=queue_file)
+    assert report == {"ready_items": 2, "warnings": 0}
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT payload_ref, source FROM items ORDER BY payload_ref"
+        ).fetchall()
+
+    assert rows == [
+        ("https://example.com/a", "browser_extension"),
+        ("https://example.com/b", "browser_extension"),
+    ]
