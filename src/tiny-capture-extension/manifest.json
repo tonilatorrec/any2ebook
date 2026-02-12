@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "Tiny Capture",
+  "name": "tiny capture",
   "version": "0.1.0",
   "description": "Save current tab URL to extension storage (AKU-style capture queue).",
   "permissions": ["storage", "tabs", "downloads"],
@@ -17,6 +17,14 @@
         "default": "Alt+Shift+S"
       },
       "description": "Save current tab URL"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tiny-capture@any2ebook",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }
