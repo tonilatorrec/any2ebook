@@ -142,12 +142,15 @@ def test_main_rejects_combined_file_and_input_dir(monkeypatch, tmp_path: Path):
 
 
 def test_run_test_mode_is_non_interactive_and_uses_links_file(monkeypatch, tmp_path: Path):
+    """`any2ebook --test` should run correctly without requiring any user input"""
     config = Config(config_path=tmp_path / "config.yaml", output_path=tmp_path)
     monkeypatch.setattr("any2ebook.any2ebook.ensure_config_path", lambda: tmp_path / "config.yaml")
     monkeypatch.setattr("any2ebook.any2ebook.Config.load", lambda _: config)
 
     called = {}
 
+    # we also need to patch fake_ingest_run() as it is directly called in any2ebook.run_test_mode()
+    # if another function was called this test will probably fail
     def fake_ingest_run(cfg, dry_run=False, links_file=None, input_dir=None):
         called["config"] = cfg
         called["dry_run"] = dry_run
@@ -156,6 +159,7 @@ def test_run_test_mode_is_non_interactive_and_uses_links_file(monkeypatch, tmp_p
         return {"ready_items": 1, "warnings": 0}
 
     monkeypatch.setattr("any2ebook.any2ebook.clippings_ingest.run", fake_ingest_run)
+    # patch input() so that it raises an error if it's called
     monkeypatch.setattr(
         "builtins.input",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("input() should not be called")),
@@ -164,6 +168,7 @@ def test_run_test_mode_is_non_interactive_and_uses_links_file(monkeypatch, tmp_p
     ok = any2ebook.run_test_mode()
 
     assert ok is True
+    # also check that arguments were correctly passed to clippings_ingest.run()
     assert called["config"] is config
     assert called["dry_run"] is True
     assert called["links_file"] is not None
