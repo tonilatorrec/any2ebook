@@ -6,6 +6,7 @@ from any2ebook.db import migrate_db
 
 
 def _seed_items(db_path: Path) -> None:
+    """Populate the database with example data."""
     with sqlite3.connect(db_path) as conn:
         conn.executemany(
             """
@@ -22,6 +23,7 @@ def _seed_items(db_path: Path) -> None:
 
 
 def test_get_urls_to_convert_excludes_converted_and_failed(tmp_path: Path):
+    """Links marked as converted or failed should be excluded from conversion."""
     db_path = tmp_path / "any2ebook.db"
     migrate_db(db_path)
     _seed_items(db_path)
@@ -46,6 +48,7 @@ def test_get_urls_to_convert_excludes_converted_and_failed(tmp_path: Path):
 
 
 def test_stage_and_convert_records_failed_and_converted(monkeypatch, tmp_path: Path):
+    """Test that failed/converted links are not converted again."""
     db_path = tmp_path / "any2ebook.db"
     output_dir = tmp_path / "out"
     staging_dir = tmp_path / "staging"
@@ -55,6 +58,7 @@ def test_stage_and_convert_records_failed_and_converted(monkeypatch, tmp_path: P
     migrate_db(db_path)
     _seed_items(db_path)
 
+    # create a dummy epub file from three links, the second one should "fail".
     def fake_create_epub(urls, output_filename, path_to_db=None):
         assert len(urls) == 3
         Path(output_filename).write_bytes(b"epub-bytes")
@@ -74,6 +78,8 @@ def test_stage_and_convert_records_failed_and_converted(monkeypatch, tmp_path: P
         staging_dir=str(staging_dir),
     )
 
+    # test that the db has marked the second link as failed and the others as
+    # converted.
     with sqlite3.connect(db_path) as conn:
         actions = conn.execute(
             "SELECT item_id, action FROM run_items ORDER BY item_id"
@@ -87,12 +93,16 @@ def test_stage_and_convert_records_failed_and_converted(monkeypatch, tmp_path: P
     assert run[0] == "committed"
     assert run[1].endswith(".epub")
 
+    # test that clippings_to_epub.get_urls_to_convert() ignores the three links
+    # since they are either converted or the run failed.
     ids, urls = get_urls_to_convert(str(db_path))
     assert ids == []
     assert urls == []
 
 
 def test_stage_and_convert_keyboard_interrupt_rolls_back(monkeypatch, tmp_path: Path):
+    """The database writes should only be confirmed when the epub file is created successfully.
+    If there is a keyboard interrupt the database should be rolled back, no partial writes"""
     db_path = tmp_path / "any2ebook.db"
     output_dir = tmp_path / "out"
     staging_dir = tmp_path / "staging"
