@@ -13,7 +13,10 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
     - avoid interactive clippings-path prompts/config writes,
     - persist normalized valid URLs with source set to the file path.
     """
-    db_path = tmp_path / "any2ebook.db"
+    db_path = tmp_path / "any2ebook.db" # dummy database
+
+    # Create dummy links file with two parseable urls and one that is not.
+    # The ingest function should raise a warning for the second url
     links_file = tmp_path / "links.txt"
     links_file.write_text(
         "\n".join(
@@ -27,12 +30,17 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
     )
 
     monkeypatch.setattr("any2ebook.clippings_ingest.ensure_db_path", lambda: db_path)
+    
+    # since the links file is already provided, clippings_ingest.run() should never ask
+    # the user for the clippings path, much less attempt to change it in the configuration.
+    # so we need to patch both input() and Config.save() to raise an error if they are called
     monkeypatch.setattr(
         "builtins.input",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("input() should not be called")),
     )
 
     config = Config(config_path=tmp_path / "config.yaml", clippings_path=None, output_path=tmp_path)
+
     monkeypatch.setattr(
         Config,
         "save",
@@ -44,11 +52,12 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
     assert report == {
         "ready_items": 2,
         "warnings": 1,
-        "files_seen": 1,
+        "files_seen": 1, # only links_file, not files in the default folder!
         "files_processed": 1,
         "files_skipped_unchanged": 0,
     }
 
+    # check that both correct links were added to the dummy database.
     with sqlite3.connect(db_path) as conn:
         rows = conn.execute(
             "SELECT payload_ref, source FROM items ORDER BY payload_ref"
@@ -62,6 +71,10 @@ def test_run_ingests_links_file_without_prompting_for_clippings_path(monkeypatch
 
 
 def test_run_ingests_capture_queue_json_file(monkeypatch, tmp_path: Path):
+    """
+    Same as `test_run_ingests_links_file_without_prompting_for_clippings_path` 
+    but for a file in json format instead of links separated by lines.
+    """
     db_path = tmp_path / "any2ebook.db"
     queue_file = tmp_path / "aku_capture_queue.json"
     queue_file.write_text(
@@ -122,6 +135,8 @@ def test_run_ingests_capture_queue_json_file(monkeypatch, tmp_path: Path):
 
 
 def test_run_ingests_mixed_input_dir(monkeypatch, tmp_path: Path):
+    """`clippings_ingest.run()` should accept both .md and text files in json format, 
+    and ingest links from both sources."""
     db_path = tmp_path / "any2ebook.db"
     input_dir = tmp_path / "inbox"
     input_dir.mkdir()
@@ -168,6 +183,8 @@ def test_run_ingests_mixed_input_dir(monkeypatch, tmp_path: Path):
 
 
 def test_run_input_dir_skips_unchanged_files(monkeypatch, tmp_path: Path):
+    """`clippings_ingest.run() should not parse the same file twice.
+    """
     db_path = tmp_path / "any2ebook.db"
     input_dir = tmp_path / "inbox"
     input_dir.mkdir()
