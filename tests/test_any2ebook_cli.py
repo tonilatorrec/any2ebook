@@ -142,7 +142,7 @@ def test_main_rejects_combined_file_and_input_dir(monkeypatch, tmp_path: Path):
 
 
 def test_run_test_mode_is_non_interactive_and_uses_links_file(monkeypatch, tmp_path: Path):
-    """`any2ebook --test` should run correctly without requiring any user input"""
+    """`any2ebook --test` should run correctly without requiring any user input."""
     config = Config(config_path=tmp_path / "config.yaml", output_path=tmp_path)
     monkeypatch.setattr("any2ebook.any2ebook.ensure_config_path", lambda: tmp_path / "config.yaml")
     monkeypatch.setattr("any2ebook.any2ebook.Config.load", lambda _: config)
@@ -168,7 +168,8 @@ def test_run_test_mode_is_non_interactive_and_uses_links_file(monkeypatch, tmp_p
     ok = any2ebook.run_test_mode()
 
     assert ok is True
-    # also check that arguments were correctly passed to clippings_ingest.run()
+    # we also need to check that we are passing the correct arguments to clippings_ingest.run(),
+    # especially that the temporary file created in any2ebook.run_test_mode() is a valid file
     assert called["config"] is config
     assert called["dry_run"] is True
     assert called["links_file"] is not None
