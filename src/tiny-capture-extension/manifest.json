@@ -5,19 +5,10 @@
   "description": "Save current tab URL to extension storage (AKU-style capture queue).",
   "permissions": ["storage", "tabs", "downloads"],
   "browser_action": {
-    "default_title": "Save link",
-    "default_popup": "popup.html"
+    "default_title": "Save link"
   },
   "background": {
     "scripts": ["background.js"]
-  },
-  "commands": {
-    "save-current-tab": {
-      "suggested_key": {
-        "default": "Alt+Shift+S"
-      },
-      "description": "Save current tab URL"
-    }
   },
   "browser_specific_settings": {
     "gecko": {

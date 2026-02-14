@@ -2,6 +2,7 @@ function nowStampForFilename() {
   return new Date().toISOString().replace(/[:]/g, "-");
 }
 
+/* this will be automatically called when the export page is opened */
 (async () => {
   const { queue } = await browser.storage.local.get({ queue: [] });
   const json = JSON.stringify(queue, null, 2);

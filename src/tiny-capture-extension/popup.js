@@ -1,16 +1,29 @@
-function nowStampForFilename() {
-  // e.g. 2026-02-12T15-30-00Z (filename-safe)
-  return new Date().toISOString().replace(/[:]/g, "-");
-}
+/* default settings */
 
 const DEFAULT_SETTINGS = {
   autoExportEnabled: false,
   autoExportSubdir: "any2ebook/inbox"
 };
 
+/* helper functions */
+
+async function getActiveTab() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  return tabs && tabs.length ? tabs[0] : null;
+}
+
+function nowStampForFilename() {
+  // e.g. 2026-02-12T15-30-00Z (filename-safe)
+  return new Date().toISOString().replace(/[:]/g, "-");
+}
+
 async function getQueue() {
   const result = await browser.storage.local.get({ queue: [] });
   return result.queue;
+}
+
+async function setQueue(queue) {
+  await browser.storage.local.set({ queue });
 }
 
 async function getSettings() {
@@ -23,13 +36,9 @@ async function getSettings() {
 
 async function setSettings(settingsPatch) {
   const current = await getSettings();
-  const next = { ...current, ...settingsPatch };
+  const next = { ...current, ...settingsPatch }; // upsert settingsPatch to current
   next.autoExportSubdir = sanitizeSubdir(next.autoExportSubdir);
   await browser.storage.local.set(next);
-}
-
-async function setQueue(queue) {
-  await browser.storage.local.set({ queue });
 }
 
 async function updateCount() {
@@ -39,6 +48,9 @@ async function updateCount() {
 }
 
 function setStatus(msg) {
+  /**
+   * Update the status in the popup window (by default it's hidden).
+   */
   document.getElementById("status").textContent = msg;
 }
 
@@ -71,18 +83,24 @@ async function autoExportItem(item, settings) {
   }
 }
 
-async function saveCurrentTab() {
-  console.log("SAVE fired");
-  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs && tabs.length ? tabs[0] : null;
-  if (!tab || !tab.url) return;
+/* functions for events */
 
+async function saveCurrentTab() {
+  /**
+   * Saves the current tab, add the item to the local queue and updates the counter.
+   */
+  const settings = await getSettings();
+  const tab = await getActiveTab();
+  if (!tab || !tab.url) return; // no tabs
+
+  // ignore internal browser pages
   const url = tab.url;
   if (url.startsWith("about:") || url.startsWith("chrome:") || url.startsWith("moz-extension:")) {
     setStatus("Cannot save internal browser pages.");
     return;
   }
 
+  // add the item to queue
   const queue = await getQueue();
   const item = {
     captured_at: new Date().toISOString(),
@@ -93,7 +111,7 @@ async function saveCurrentTab() {
   queue.push(item);
   await setQueue(queue);
 
-  const settings = await getSettings();
+  // auto export if set in the options
   if (settings.autoExportEnabled) {
     try {
       await autoExportItem(item, settings);
@@ -106,10 +124,14 @@ async function saveCurrentTab() {
     setStatus("Saved ✓");
   }
 
+  // update (increment) the counter
   await updateCount();
 }
 
 async function exportJson() {
+  /**
+   * Opens the export page, which will export the json file automatically 
+   */
   const url = browser.runtime.getURL("export.html");
   await browser.tabs.create({ url });
   setStatus("Export tab opened ✓");
@@ -129,11 +151,17 @@ async function loadSettingsUi() {
 }
 
 async function onAutoExportEnabledChange(event) {
+  /**
+   * change autoExportEnabled whenever the chechbox is clicked (either to set or unset it) 
+   */
   await setSettings({ autoExportEnabled: event.target.checked });
   setStatus(event.target.checked ? "Auto-export enabled." : "Auto-export disabled.");
 }
 
 async function onAutoExportSubdirChange(event) {
+  /**
+   * change autoExportSubdir whenever the downloads subfolder is changed 
+   */
   const cleanSubdir = sanitizeSubdir(event.target.value);
   event.target.value = cleanSubdir;
   await setSettings({ autoExportSubdir: cleanSubdir });

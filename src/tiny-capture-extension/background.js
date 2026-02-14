@@ -100,10 +100,3 @@ async function saveCurrentTabUrl() {
 browser.browserAction.onClicked.addListener(() => {
   saveCurrentTabUrl().catch(console.error);
 });
-
-// Hotkey saves URL
-browser.commands.onCommand.addListener((command) => {
-  if (command === "save-current-tab") {
-    saveCurrentTabUrl().catch(console.error);
-  }
-});
